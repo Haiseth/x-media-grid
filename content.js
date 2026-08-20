@@ -3407,9 +3407,17 @@
     window.scrollTo(0, 0);
     // 一番上に着くまで待つ（実測では上端でもscrollYが50前後残る）。ここで
     // 上に戻すのは「新着取り込みバー」が仮想リストに現れるのが最上部の時
-    // だけだから。
-    for (let i = 0; i < 20 && window.scrollY > 80; i++) await sleep(100);
-    await sleep(400);
+    // だけだから。固定待ちは体感の遅さに直結するので、条件が満たされ次第
+    // 進むポーリングにしている（実機フィードバック：3〜6秒は少し長い）。
+    await waitFor(() => window.scrollY <= 80, 1500, 50);
+    // 新着シグナル（未消化の告知ピル or 青ドット）が最初から無いなら、
+    // 取り込みバーは絶対に出ないので待つだけ無駄。この判定で「新着なしの
+    // 更新」が約1.9秒短縮される（実機計測：3.0秒→1.1秒）。
+    const hadSignal =
+      !!(primary && findNewPostsPillButton(primary)) ||
+      !!(homeLink && homeLink.querySelector('svg ~ div'));
+    // バーが描画されるのを待つ（出ない＝新着なし、の場合もあるので短く諦める）
+    if (hadSignal) await waitFor(() => findNewPostsBar(), 600, 60);
     // レース対策の指紋：Xが新TLをfetchし終えるまで1〜2秒かかる。先頭ツイートの
     // 入れ替わりを待たずに組み直すと「更新したのに同じ内容」になる（実機で
     // 確定した過去バグ）。指紋は**上に戻した後**に取る。深くスクロールした
@@ -3427,18 +3435,16 @@
       // ホームリンク経由でタイムラインを引き直させ、その結果バーが出てきたら
       // 押す（実機では引き直し後にバーが現れるケースがある）。
       if (homeLink) homeLink.click();
-      for (let i = 0; i < 8 && !bar; i++) {
-        await sleep(250);
-        bar = findNewPostsBar();
-      }
+      if (hadSignal) bar = await waitFor(() => findNewPostsBar(), 1000, 80);
     }
     const barClicked = !!bar;
     if (bar) {
       bar.click();
-      await sleep(500); // 合流の描画が始まるまで少し待つ
+      // 合流が始まる＝バーが消えるのを待つ（固定待ちより速い）
+      await waitFor(() => !findNewPostsBar(), 800, 60);
     }
-    for (let i = 0; i < 40; i++) {
-      await sleep(300);
+    for (let i = 0; i < 60; i++) {
+      await sleep(150); // 粒度を細かくして、条件が整った瞬間に抜けられるようにする
       if (token !== Grid.navToken) break;
       // 【実機で発見したバグ】先頭セルは必ずツイートだと決め打ちしていたが、
       // 新着取り込みバー（articleを持たない）が先頭に居座ると毎回この行で
@@ -3459,13 +3465,13 @@
         const topNow = tl ? tl.getAttribute('href') : null;
         // バーを押せた時は合流が確定しているので、先頭の入れ替わりを
         // 短く待つだけでよい（押せなかった時だけ引き直しの完了を長めに待つ）。
-        const limit = barClicked ? 4 : 10;
+        const limit = barClicked ? 6 : 20; // 150ms刻みなので約0.9秒／3秒
         if (!srcTopBefore || (topNow && topNow !== srcTopBefore) || i >= limit) break;
       } else {
         window.scrollTo(0, 0);
         // 仮想リスト停止（scrollToで直らずty>=400が続く）時だけの最後の保険。
         // 通常の更新でリロードは絶対にしない（実機フィードバック）。
-        if (i === 10 && tryResyncReload()) return;
+        if (i === 20 && tryResyncReload()) return;
       }
     }
     // 【ここが要】上端に留まってXに「ユーザーは一番上にいる」と認識させる。
@@ -3474,13 +3480,18 @@
     // タイル収集（2万px下へスクロール）が始まっていたため、上端に居た時間が
     // 実質ゼロで、ドットが永久に消えなかった。
     window.scrollTo(0, 0);
-    for (let i = 0; i < 25; i++) {
-      await sleep(120);
+    // 待ち方：ドットが消えた＝Xが未読を解除した、が唯一の成功シグナルなので
+    // それを毎回見て、消えた瞬間に抜ける。最初から点いていない（新着なし）
+    // 場合も即抜けになるので、体感の待ち時間はほぼゼロになる。最大2.4秒。
+    const homeLinkForDot = document.querySelector('[data-testid="AppTabBar_Home_Link"]');
+    const dotWasOn = !!(homeLinkForDot && homeLinkForDot.querySelector('svg ~ div'));
+    for (let i = 0; i < 30; i++) {
+      await sleep(80);
       if (token !== Grid.navToken) break;
       if (window.scrollY > 4) window.scrollTo(0, 0);
-      // ドットが消えたら目的達成なので早く抜ける（無駄に待たない）
       const hl = document.querySelector('[data-testid="AppTabBar_Home_Link"]');
-      if (i > 8 && hl && !hl.querySelector('svg ~ div')) break;
+      const dotNow = !!(hl && hl.querySelector('svg ~ div'));
+      if (!dotNow && (!dotWasOn || i >= 3)) break;
     }
     // ヘッダーの非表示を元に戻す
     for (const el of unhidden) {
