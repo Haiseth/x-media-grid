@@ -3488,12 +3488,18 @@
     const unhidden = [...document.querySelectorAll('.xmr-tablist-hide')];
     Grid.unhiddenForHold = unhidden;
     for (const el of unhidden) el.classList.remove('xmr-tablist-hide');
-    window.scrollTo(0, 0);
-    // 一番上に着くまで待つ（実測では上端でもscrollYが50前後残る）。ここで
-    // 上に戻すのは「新着取り込みバー」が仮想リストに現れるのが最上部の時
-    // だけだから。固定待ちは体感の遅さに直結するので、条件が満たされ次第
-    // 進むポーリングにしている（実機フィードバック：3〜6秒は少し長い）。
+    // 【実機フィードバックで判明した重要な差】「cキー/更新ボタンは、青バッジが
+    // 無い時にホームボタンが拾ってくる新着を拾ってこない」。原因は上へ戻す
+    // 方法の違いだった。こちらがwindow.scrollTo()で強制的に動かしても、X内部の
+    // 「今ユーザーは一番上にいる」という状態は更新されないことがあり、その状態で
+    // ホームリンクを押しても取り込みが起きない。ユーザーが手で押す時は、
+    // 1発目でX自身が上へ戻り（＝X内部の状態も正しく更新され）、こちらの
+    // 割り込みによる2発目が「上にいる状態での押下」になって取り込みが走る。
+    // ＝人間の操作と同じ2段階を、こちらでも忠実に再現する。
+    if (homeLink) homeLink.click(); // 1発目：X自身に上へ戻らせる
     await waitFor(() => window.scrollY <= 80, 1500, 50);
+    window.scrollTo(0, 0); // 念のため（Xが戻しきらなかった場合の保険）
+    await sleep(200); // Xの内部状態とスクロールイベントが落ち着くのを待つ
     // 新着シグナル（未消化の告知ピル or 青ドット）が最初から無いなら、
     // 取り込みバーは絶対に出ないので待つだけ無駄。この判定で「新着なしの
     // 更新」が約1.9秒短縮される（実機計測：3.0秒→1.1秒）。
@@ -3516,10 +3522,16 @@
     let bar = findNewPostsBar();
     if (!bar) {
       // バーが出ていない＝Xがまだ新着を用意していないか、そもそも新着なし。
-      // ホームリンク経由でタイムラインを引き直させ、その結果バーが出てきたら
-      // 押す（実機では引き直し後にバーが現れるケースがある）。
+      // ここが2発目のホームクリック（上の1発目のコメント参照）。既に上端に
+      // 居る状態で押すことになるので、Xは「一番上でもう一度ホームを押した」
+      // ＝最新を取り直す、として扱う。青バッジが無くても新しい投稿を拾って
+      // くるのはこの経路（実機フィードバック：ホームは拾うのにcは拾わない、
+      // の差はここだった）。
       if (homeLink) homeLink.click();
-      if (hadSignal) bar = await waitFor(() => findNewPostsBar(), 1000, 80);
+      // 引き直しの結果として取り込みバーが現れることがあるので少し待つ。
+      // 新着シグナルが無かった場合も、この2発目で新しい分が来る可能性がある
+      // ため、短めに待って様子を見る。
+      bar = await waitFor(() => findNewPostsBar(), hadSignal ? 1000 : 500, 80);
     }
     const barClicked = !!bar;
     if (bar) {
@@ -4200,7 +4212,14 @@
       '<a href="https://x.com/i/bookmarks">' + t('toolbarBookmarks') + '</a>' +
       '</div>' +
       '<div class="xmr-tb-group xmr-tb-group-filter">' +
-      '<button type="button" class="xmr-tb-refresh">' + t('toolbarRefresh') + '</button>' +
+      // ホームでは更新ボタンを出さない。中身はXのホームボタンと同じ処理で、
+      // そのホームボタンは左のナビに常に見えているため完全な重複だった
+      // （実機フィードバック：「更新ボタンはいらない、ホームで良い」）。
+      // メディア/いいね/ブックマークにはホームボタンに相当するものが無く、
+      // そこでの更新は「グリッドを拾い直す」別の役割があるので残す。
+      (mode === 'home'
+        ? ''
+        : '<button type="button" class="xmr-tb-refresh">' + t('toolbarRefresh') + '</button>') +
       '<span class="xmr-tb-refresh-status"></span>' +
       '<button type="button" class="xmr-tb-filter-unread">' + t('filterUnread') + ': OFF</button>' +
       '<button type="button" class="xmr-tb-filter-video">' + t('filterVideoOnly') + ': OFF</button>' +
@@ -4343,7 +4362,8 @@
     // 操作（新着バナー、無ければホームアイコンの「既にホームにいる状態で
     // もう一度押すと最新に更新される」挙動）を裏で行ってからグリッドを
     // 作り直す。それ以外（メディア/いいね/ブックマーク）は単純リロードで十分。
-    toolbar.querySelector('.xmr-tb-refresh').addEventListener('click', () => {
+    const refreshBtn = toolbar.querySelector('.xmr-tb-refresh');
+    if (refreshBtn) refreshBtn.addEventListener('click', () => {
       if (Grid.mode === 'home') {
         refreshHomeTimeline();
       } else {
