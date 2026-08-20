@@ -3295,6 +3295,14 @@
       if (label.dataset.xmrStalePill && label.dataset.xmrStalePill === pillContentSig(label)) continue;
       const btn = label.closest('button, [role="button"]');
       if (!btn) continue;
+      // 【実機で確定・v3.66】Xはピルを「格納状態」でもDOMに置いている：
+      // ボタンにaria-hidden="true"、[role="status"]ラッパーがopacity:0、
+      // アバター画像0個。この状態はユーザーには見えず、トラステッドの
+      // 上スクロールでも降りてこない＝押しようがない。表示状態（実際に
+      // 告知中）のピルだけを新着シグナルとして扱う。
+      if (btn.getAttribute('aria-hidden') === 'true') continue;
+      const statusWrap = btn.closest('[role="status"]');
+      if (statusWrap && parseFloat(getComputedStyle(statusWrap).opacity) === 0) continue;
       let hidden = false;
       for (let n = btn; n && n !== document.documentElement; n = n.parentElement) {
         if (
@@ -3316,91 +3324,27 @@
     // 見ている（＝画面外）ことが多く気付きにくいという指摘があったため、
     // 常にスクロール位置に関係なく見えるツールバー（sticky）側の専用要素に変更。
     if (Grid.refreshStatusEl) Grid.refreshStatusEl.textContent = t('refreshing');
-    const token = Grid.navToken;
-    // クリック自体はopacity:0で隠れている本物の要素にも普通に効く
-    // （合成clickはhit-testを経由しないため、見た目の状態に依存しない）。
-    const primary = document.querySelector('[data-testid="primaryColumn"]');
-    // 【実機で確定（2026-08-20ライブ検証）】新着ピル(pillLabel)のボタンは
-    // 合成クリックに一切反応しない。display:none中はもちろん、
-    // .xmr-tablist-hideを一時的に外して表示状態(矩形284×40)にしても、
-    // click()もPointerEventフルシーケンスも無視された（trusted要求と推定）。
-    // 一方、ホームのナビリンクへの合成click()は確実に効き、TL全体が
-    // 最新ミックスに入れ替わり青ドットも消えることを同日確認済み。
-    // よって更新経路はホームリンク一本に統一する（ピルのクリックは全廃）。
-    const homeLink = document.querySelector('[data-testid="AppTabBar_Home_Link"]');
-    // 事後検証用の指紋：更新前の先頭ツイート（ソース側DOM）。
-    // 「更新したのに同じ内容」の真因はレースだった：ホームクリック自体は
-    // 効いていたが、Xが新TLをfetchして差し替えるまで1〜2秒かかるのに対し、
-    // 下の待機ループは「旧リストの先頭がty<400」を300msで満たして即抜けし、
-    // 旧内容のままグリッドを組み直していた。先頭ツイートの入れ替わりを
-    // 待ち条件に加えて解消する。
-    const topLink0 = primary && primary.querySelector('[data-testid="cellInnerDiv"] article a[href*="/status/"]');
-    const srcTopBefore = topLink0 ? topLink0.getAttribute('href') : null;
-    // 更新前に新着シグナル（未消化のピル or 青ドット）があったか。事後検証で
-    // 「シグナルがあったのに何も変わらなかった＝更新失敗」の判定に使う。
-    const hadNewSignal =
-      !!(primary && findNewPostsPillButton(primary)) ||
-      !!(homeLink && homeLink.querySelector('svg ~ div'));
-    if (homeLink) homeLink.click();
-    // 固定で2秒待つだけだと、Fキーの件と同じ原因で更新後も途中のツイートから
-    // 表示されてしまうことがあった（実機報告：更新しても順番通りに見えない）。
-    // activateGrid()の初回ロードと同じ「本文入りのセルでtranslateYが小さい
-    // ことを確認してから進める」方式に統一する。ただしwindow.scrollTo(0,0)は
-    // Xの仮想リストを確実に再同期させられないケースがあることを実機で確認
-    // 済み（activateGrid()側のコメント参照）。しばらく待っても直らなければ
-    // リロードを1回だけ行う(tryResyncReload)。
-    const cellSelector = '[data-testid="primaryColumn"] [data-testid="cellInnerDiv"]';
-    window.scrollTo(0, 0);
-    for (let i = 0; i < 40; i++) {
-      await sleep(300);
-      if (token !== Grid.navToken) break;
-      const candidate = document.querySelector(cellSelector);
-      if (!candidate || !candidate.querySelector('article')) continue;
-      const m = (candidate.style.transform || '').match(/translateY\(([-\d.]+)px\)/);
-      const ty = m ? parseFloat(m[1]) : 0;
-      if (ty < 400) {
-        // レース対策：位置が整っていても、先頭ツイートがまだ更新前と同じなら
-        // Xのfetch完了前なので待ち続ける（最大6秒。新着ゼロで本当に同じ
-        // 可能性もあるため無限には待たない）。
-        const tl = candidate.querySelector('article a[href*="/status/"]');
-        const topNow = tl ? tl.getAttribute('href') : null;
-        if (!srcTopBefore || (topNow && topNow !== srcTopBefore) || i >= 20) break;
-      } else {
-        window.scrollTo(0, 0);
-        // 約3秒scrollTo()で直らなければリロードを1回だけ（activateGrid側と同じ
-        // 方針）。リロード後はonNavigate→activateGrid('home')が新規に走り、
-        // 最新のTLでグリッドが再構築される。既読・画像のみ表示の設定は
-        // localStorage保存なのでリロードしても消えない（既読のデバウンス分は
-        // tryResyncReload内でflushしてから リロードされる）。
-        // ※ty<400で単に先頭の入れ替わりを待っているだけの時に誤発動しない
-        //   よう、仮想リスト停止（ty>=400が続く）のこの分岐に限定する。
-        if (i === 10 && tryResyncReload()) return;
-      }
-      // ホイールスクロールを促すヒントは削除した（activateGrid側と同じ理由）
-    }
-    Grid.refreshing = false;
-    if (Grid.refreshStatusEl) Grid.refreshStatusEl.textContent = '';
-    if (token !== Grid.navToken) return; // その間に他のページへ移動していたら何もしない
-    if (Grid.active && Grid.mode === 'home') {
-      resetGridEntries();
-      const pc2 = document.querySelector('[data-testid="primaryColumn"]');
-      // ゾンビピルの消化：TLの更新に成功してもピル要素はDOMに残り続けることが
-      // 実機で確認されている。ここでマークして以後のバナー検出から除外する
-      // （マークしないと更新直後にまたバナーが出て「更新できてない」ように
-      // 見える）。Xが本当に次の新着で出し直すピルは別要素なので検出できる。
-      if (pc2) {
-        for (const l of pc2.querySelectorAll('[data-testid="pillLabel"]')) {
-          l.dataset.xmrStalePill = pillContentSig(l);
-        }
-      }
-      // 事後検証：更新前に新着シグナル（ピル/青ドット）があったのに、先頭
-      // ツイートが1件も変わっていない場合はホームクリックが効いていない
-      // 疑いなので、最終手段としてリロードで確実に最新TLへ。tryResyncReloadは
-      // 同一URLで5分に1回しか発火しないため、リロードループにはならない。
-      const topLink1 = pc2 && pc2.querySelector('[data-testid="cellInnerDiv"] article a[href*="/status/"]');
-      const srcTopAfter = topLink1 ? topLink1.getAttribute('href') : null;
-      if (hadNewSignal && srcTopBefore && srcTopAfter === srcTopBefore) tryResyncReload();
-    }
+    // 【2026-08-20の長い実機検証の結論】ホームの更新は「ページリロード」一択。
+    // 試して不成立だった代替案（詳細はCHANGELOG v3.63〜3.66）：
+    // - 新着ピルへの合成クリックは全手段無効（click/PointerEvent列/キー'.'、
+    //   表示状態にしても無反応＝trusted要求）
+    // - ホームリンクの合成クリックは「効く」が、おすすめの引き直しであって
+    //   ピルが告知するポスト群の合流ではない。同じ内容が既読付きで並び直す
+    //   だけに見える（実機報告：使用感悪すぎる）
+    // - グリッドを一時解除して本物ピルをユーザーにクリックさせる受け渡し案は、
+    //   Xがピルを「格納状態」から出さないケース（トラステッドの上スクロール
+    //   でも降りてこない）があり、見えないボタンは押せないため不成立
+    // リロードなら常に最新TLが先頭から得られ、ピル/ドットの状態もXが
+    // 正しく作り直す。既読はflushしてから移るので失われず、新着は未読の
+    // まま入ってくる（「未読のみ表示」の運用もそのまま機能する）。
+    try {
+      // リロード直後もXがドットを残す/すぐ再点灯することがあるため、
+      // ドット起因のバナー再点灯をしばらく抑止（sessionStorageでリロードを
+      // またいで引き継ぐ）。新しいピルの出現は即バナーに反映される。
+      sessionStorage.setItem('xmr-dot-snooze', String(Date.now() + 3 * 60 * 1000));
+    } catch (e) {}
+    flushSeenTweetsNow();
+    location.reload();
   }
 
   // 本物の「ホーム」ナビアイコンは、グリッド表示中でも裏では本来の
@@ -4338,7 +4282,16 @@
         // 非表示にしていてもdisplay:noneなだけで要素は存在するので検知できる。
         const homeLink = document.querySelector('[data-testid="AppTabBar_Home_Link"]');
         const homeDot = homeLink && homeLink.querySelector('svg ~ div');
-        const show = (!!pill || !!homeDot) && !Grid.refreshing && Settings.newPostsBanner;
+        // ドットは更新後もXがしばらく消さないことがある（トラステッドの
+        // ホームクリックでも即消えないことを実機確認）。更新直後の再点灯で
+        // 「押しても消えない」と誤解させないよう、スヌーズ中はドットを無視。
+        // スヌーズ期限は更新（＝リロード）をまたいで効くようsessionStorage。
+        let dotSnooze = 0;
+        try {
+          dotSnooze = parseInt(sessionStorage.getItem('xmr-dot-snooze') || '0', 10) || 0;
+        } catch (err) {}
+        const dotActive = !!homeDot && Date.now() > dotSnooze;
+        const show = (!!pill || dotActive) && !Grid.refreshing && Settings.newPostsBanner;
         if ((npBtn.style.display === 'none') === show) {
           npBtn.style.display = show ? 'block' : 'none';
           if (show) syncTabbarTop();
