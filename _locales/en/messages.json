@@ -314,7 +314,7 @@
     "message": "About this extension"
   },
   "optAboutIntro": {
-    "message": "This extension turns X (formerly Twitter) media, likes, bookmarks and Home into a grid of images you can browse quickly with the keyboard alone. Liking, bookmarking, following and more take a single key. The main features, in order of importance:"
+    "message": "This extension turns X (formerly Twitter) media, likes, bookmarks and Home into a grid of images you can browse quickly with the keyboard alone. Liking, bookmarking, reposting and replying each take a single key. The main features, in order of importance:"
   },
   "optFeat1H": {
     "message": "1. Grid view"
