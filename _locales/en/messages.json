@@ -444,6 +444,12 @@
   "optNewPostsBannerDesc": {
     "message": "Default: on. While the home grid is active, a banner appears when new posts arrive; click to load them."
   },
+  "optPhotoFirstLabel": {
+    "message": "Open media tabs on the photo side"
+  },
+  "optPhotoFirstDesc": {
+    "message": "Default: on. X now opens media tabs on the video side. While this is on, the photo side is opened instead. Either way you can switch any time with the Photos / Videos buttons in the toolbar."
+  },
   "optHideHomeDotLabel": {
     "message": "Hide the blue unread dot on Home"
   },

@@ -167,6 +167,8 @@
       "bannerNewPosts": "新しいポストを表示",
       "optNewPostsBannerLabel": "グリッド上に「新しいポストを表示」を出す",
       "optNewPostsBannerDesc": "初期値：オン。ホームのグリッド表示中、新着が届いたら上部にバナーが出て、クリックで取り込みます。",
+      "optPhotoFirstLabel": "メディア欄を開いたら画像を優先して表示",
+      "optPhotoFirstDesc": "初期値：オン。最近のXはメディア欄を開くと動画側が表示されます。オンの間は画像側を開きます（どちらの場合もツールバーの「画像」「動画」でいつでも切り替えられます）。",
       "optHideHomeDotLabel": "ホームの青い未読ドットを隠す",
       "optHideHomeDotDesc": "初期値：オフ（表示する）。左ナビのホームアイコンに付く小さな青丸を隠します。",
       "optHideNotifBadgeLabel": "通知の数字バッジを隠す",
@@ -294,6 +296,8 @@
       "bannerNewPosts": "Show new posts",
       "optNewPostsBannerLabel": "Show the \"new posts\" banner on the grid",
       "optNewPostsBannerDesc": "Default: on. While the home grid is active, a banner appears when new posts arrive; click to load them.",
+      "optPhotoFirstLabel": "Open media tabs on the photo side",
+      "optPhotoFirstDesc": "Default: on. X now opens media tabs on the video side. While this is on, the photo side is opened instead. Either way you can switch any time with the Photos / Videos buttons in the toolbar.",
       "optHideHomeDotLabel": "Hide the blue unread dot on Home",
       "optHideHomeDotDesc": "Default: off (shown). Hides the small blue dot on the Home icon in the left nav.",
       "optHideNotifBadgeLabel": "Hide the notification count badge",
@@ -379,6 +383,7 @@
     accentColor: '', // ''=既定（Xブランド青）。#rrggbbでアクセント色を一括変更
     seenColor: '', // ''=既定（テーマ別の青系）。#rrggbbで既読の帯色を変更
     newPostsBanner: true, // グリッド上の「新しいポストを表示」バナー
+    photoFirst: true, // メディア欄を開いた時に画像側(?filter=photo)を優先する
     hideHomeDot: false, // ホームアイコンの青い未読ドットを隠す
     hideNotifBadge: false, // 通知アイコンの数字バッジを隠す
     keys: Object.assign({}, DEFAULT_KEYS),
@@ -426,6 +431,7 @@
     if (typeof saved.hideSidebar === 'boolean') Settings.hideSidebar = saved.hideSidebar;
     if (typeof saved.tileActions === 'boolean') Settings.tileActions = saved.tileActions;
     if (typeof saved.newPostsBanner === 'boolean') Settings.newPostsBanner = saved.newPostsBanner;
+    if (typeof saved.photoFirst === 'boolean') Settings.photoFirst = saved.photoFirst;
     if (typeof saved.hideHomeDot === 'boolean') Settings.hideHomeDot = saved.hideHomeDot;
     if (typeof saved.hideNotifBadge === 'boolean') Settings.hideNotifBadge = saved.hideNotifBadge;
     applyNavBadgePrefs();
@@ -775,6 +781,9 @@
   // 即座に?filter=photoへ引き戻してしまうため、直後の1回だけ抑制するフラグ。
   let suppressNextPhotoRedirect = false;
   function autoRedirectMediaPhoto() {
+    // 設定でOFFにできる（初期値ON）。OFFの時はXの標準どおり、メディア欄を
+    // 開くと動画側が表示される。ONだと画像側を優先して開く。
+    if (!Settings.photoFirst) return;
     const m = location.pathname.match(/^\/[^/]+\/media\/?$/);
     if (!m) return;
     if (location.search) return; // 既にフィルタ指定済みなら尊重する
@@ -3921,8 +3930,13 @@
     }
     if (!cacheFresh) {
     window.scrollTo(0, 0);
-    for (let i = 0; i < 80; i++) {
-      await sleep(300);
+    // 【体感速度】以前は必ず先にsleep(300)してから判定していたため、Xの
+    // リストが既に整っていても最低300ms待たされていた（戻り復元を1414ms→
+    // 660msにしたwaitForの件と全く同じ構図）。判定を先に行い、待つのは
+    // 「まだ整っていない時だけ」にする。刻みも300ms→120msに細かくして、
+    // 整った瞬間に抜けられるようにする（総待ち時間の上限はほぼ同じ）。
+    for (let i = 0; i < 200; i++) {
+      if (i > 0) await sleep(120);
       if (token !== Grid.navToken || currentGridMode() !== mode) {
         removeEarlyLoading();
         return;
@@ -3954,7 +3968,8 @@
       // 約3秒scrollTo()を試しても直らない場合、確実に効くと実機確定済みの
       // リロードを1回だけ行う（ガードにより同一URLで5分に1回まで。リロード
       // 後にまた直らなくても二重リロードはせず、下のヒント表示に進む）。
-      if (i === 10 && tryResyncReload()) {
+      // ※iの刻みを300ms→120msに変えたので、時間基準を合わせて i===25 (約3秒)
+      if (i === 25 && tryResyncReload()) {
         removeEarlyLoading();
         return;
       }

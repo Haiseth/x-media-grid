@@ -444,6 +444,12 @@
   "optNewPostsBannerDesc": {
     "message": "初期値：オン。ホームのグリッド表示中、新着が届いたら上部にバナーが出て、クリックで取り込みます。"
   },
+  "optPhotoFirstLabel": {
+    "message": "メディア欄を開いたら画像を優先して表示"
+  },
+  "optPhotoFirstDesc": {
+    "message": "初期値：オン。最近のXはメディア欄を開くと動画側が表示されます。オンの間は画像側を開きます（どちらの場合もツールバーの「画像」「動画」でいつでも切り替えられます）。"
+  },
   "optHideHomeDotLabel": {
     "message": "ホームの青い未読ドットを隠す"
   },
