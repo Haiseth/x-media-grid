@@ -3298,6 +3298,28 @@
     return sig || '(no-imgs)';
   }
 
+  // 【2026-08-21・実機報告から発見】Xの新着取り込みの本体はこれ。青い楕円の
+  // ピル（「〇〇さんがポストしました」）とは別物で、**タイムラインの一番上の
+  // セルに現れる四角いボタン**（「56 件のポストを表示」）。ウィンドウが
+  // 一番上にある時だけ仮想リストに現れる。ピルと違い**合成クリックが普通に
+  // 効き**、押すとその件数分が先頭に合流する（実機確認：先頭が9時間前の
+  // 投稿から1時間前の投稿に入れ替わり、バーも消えた）。
+  // 検出は言語非依存の構造で行う：先頭のcellInnerDivで、articleを含まず
+  // （＝ツイートではない）、短いテキストのボタンを1つ持つセル。
+  function findNewPostsBar() {
+    const pc = document.querySelector('[data-testid="primaryColumn"]');
+    if (!pc) return null;
+    const cell = pc.querySelector('[data-testid="cellInnerDiv"]');
+    if (!cell || cell.querySelector('article')) return null;
+    const m = (cell.style.transform || '').match(/translateY\(([-\d.]+)px\)/);
+    if (m && parseFloat(m[1]) > 10) return null; // 本当に先頭のセルか
+    const btn = cell.querySelector('button, [role="button"]');
+    if (!btn) return null;
+    const txt = (btn.textContent || '').trim();
+    if (!txt || txt.length > 40) return null; // 別のモジュール（おすすめ等）を誤爆しない
+    return btn;
+  }
+
   function findNewPostsPillButton(primary) {
     // 【実機で確定した罠】Xは非表示中のタブ（フォロー中等）のタイムラインも
     // DOMに保持しており、そちらにもpillLabelが存在し得る。当初は
@@ -3361,31 +3383,64 @@
     const token = Grid.navToken;
     const primary = document.querySelector('[data-testid="primaryColumn"]');
     const homeLink = document.querySelector('[data-testid="AppTabBar_Home_Link"]');
-    // レース対策の指紋：Xが新TLをfetchし終えるまで1〜2秒かかる。先頭
-    // ツイートの入れ替わりを待たずに組み直すと「更新したのに同じ内容」に
-    // なる（実機で確定した過去バグ）。
-    const topLink0 = primary && primary.querySelector('[data-testid="cellInnerDiv"] article a[href*="/status/"]');
-    const srcTopBefore = topLink0 ? topLink0.getAttribute('href') : null;
     const cellSelector = '[data-testid="primaryColumn"] [data-testid="cellInnerDiv"]';
     window.scrollTo(0, 0);
-    // 「もう上にいる」とXに認識させてからクリックする。スムーススクロール等で
-    // 実際に上へ着くまで少し待つ（実測では上端でもscrollYが50前後残る）。
+    // 一番上に着くまで待つ（実測では上端でもscrollYが50前後残る）。ここで
+    // 上に戻すのは「新着取り込みバー」が仮想リストに現れるのが最上部の時
+    // だけだから。
     for (let i = 0; i < 20 && window.scrollY > 80; i++) await sleep(100);
     await sleep(400);
-    if (homeLink) homeLink.click();
+    // レース対策の指紋：Xが新TLをfetchし終えるまで1〜2秒かかる。先頭ツイートの
+    // 入れ替わりを待たずに組み直すと「更新したのに同じ内容」になる（実機で
+    // 確定した過去バグ）。指紋は**上に戻した後**に取る。深くスクロールした
+    // 位置で取ると、上に戻しただけで別のツイートになり「入れ替わった」と
+    // 誤判定して待ちが空回りする（実機計測：再構築まで14秒かかっていた）。
+    const topLink0 = document.querySelector(cellSelector + ' article a[href*="/status/"]');
+    const srcTopBefore = topLink0 ? topLink0.getAttribute('href') : null;
+    // 取り込みバーは押すと消えるが、Xがすぐ次のバーを出すこともある。
+    // 「押せたかどうか」で待ち方を変えるためにここで記録する。
+    // 本命：新着取り込みバーがあれば押す。これが「◯件を表示」の正規の
+    // 取り込みで、告知された分がそのまま先頭に合流する。
+    let bar = findNewPostsBar();
+    if (!bar) {
+      // バーが出ていない＝Xがまだ新着を用意していないか、そもそも新着なし。
+      // ホームリンク経由でタイムラインを引き直させ、その結果バーが出てきたら
+      // 押す（実機では引き直し後にバーが現れるケースがある）。
+      if (homeLink) homeLink.click();
+      for (let i = 0; i < 8 && !bar; i++) {
+        await sleep(250);
+        bar = findNewPostsBar();
+      }
+    }
+    const barClicked = !!bar;
+    if (bar) {
+      bar.click();
+      await sleep(500); // 合流の描画が始まるまで少し待つ
+    }
     for (let i = 0; i < 40; i++) {
       await sleep(300);
       if (token !== Grid.navToken) break;
-      const candidate = document.querySelector(cellSelector);
-      if (!candidate || !candidate.querySelector('article')) continue;
+      // 【実機で発見したバグ】先頭セルは必ずツイートだと決め打ちしていたが、
+      // 新着取り込みバー（articleを持たない）が先頭に居座ると毎回この行で
+      // continueし、ループが40回×300ms＝12秒空回りして「更新中…」が
+      // 終わらなかった。ツイートを持つ最初のセルを探す形にする。
+      let candidate = null;
+      for (const c of document.querySelectorAll(cellSelector)) {
+        if (c.querySelector('article')) { candidate = c; break; }
+      }
+      if (!candidate) continue;
       const m = (candidate.style.transform || '').match(/translateY\(([-\d.]+)px\)/);
       const ty = m ? parseFloat(m[1]) : 0;
       if (ty < 400) {
-        // 位置が整っていても先頭が入れ替わるまで待つ（最大6秒。新着ゼロで
-        // 本当に同じ可能性もあるため無限には待たない）。
+        // 位置が整っていても先頭が入れ替わるまで待つ（最大3秒。新着ゼロで
+        // 本当に同じ可能性もあるため無限には待たない。バーを押せた場合は
+        // 合流済みなのですぐ抜ける）。
         const tl = candidate.querySelector('article a[href*="/status/"]');
         const topNow = tl ? tl.getAttribute('href') : null;
-        if (!srcTopBefore || (topNow && topNow !== srcTopBefore) || i >= 20) break;
+        // バーを押せた時は合流が確定しているので、先頭の入れ替わりを
+        // 短く待つだけでよい（押せなかった時だけ引き直しの完了を長めに待つ）。
+        const limit = barClicked ? 4 : 10;
+        if (!srcTopBefore || (topNow && topNow !== srcTopBefore) || i >= limit) break;
       } else {
         window.scrollTo(0, 0);
         // 仮想リスト停止（scrollToで直らずty>=400が続く）時だけの最後の保険。
@@ -3398,10 +3453,22 @@
     if (token !== Grid.navToken) return; // その間に他のページへ移動していたら何もしない
     if (Grid.active && Grid.mode === 'home') {
       resetGridEntries();
-      // ドットはXがすぐ消さないことがあるため、更新直後の再点灯を3分抑止
-      try {
-        sessionStorage.setItem('xmr-dot-snooze', String(Date.now() + 3 * 60 * 1000));
-      } catch (e) {}
+      // 取り込み済みのピルは「消化済み」として印を付け、以後のバナー判定から
+      // 外す（Xはピル要素をDOMに残し続けるため）。
+      const pc2 = document.querySelector('[data-testid="primaryColumn"]');
+      if (pc2) {
+        for (const l of pc2.querySelectorAll('[data-testid="pillLabel"]')) {
+          l.dataset.xmrStalePill = pillContentSig(l);
+        }
+      }
+      // 【実機で確定・重要】青ドットは、取り込みバーを押して29件を実際に
+      // 合流させても一度も消えない（0.5秒刻み×20回すべて点灯を観測）。
+      // 新着が絶え間なく届くフィードでは、ドットもピルも数秒で復活するため、
+      // これらをそのままバナーの条件にすると「押しても消えない＝壊れている」
+      // としか見えない（実機報告：「消えた瞬間がないわけ」）。
+      // 更新が完了したら一定時間バナーを黙らせ、「取り込んだ」ことが目で
+      // 分かるようにする。この間に届いた分は次の点灯で拾える。
+      Grid.bannerSnoozeUntil = Date.now() + 90 * 1000;
     }
   }
 
@@ -4346,16 +4413,10 @@
         // 非表示にしていてもdisplay:noneなだけで要素は存在するので検知できる。
         const homeLink = document.querySelector('[data-testid="AppTabBar_Home_Link"]');
         const homeDot = homeLink && homeLink.querySelector('svg ~ div');
-        // ドットは更新後もXがしばらく消さないことがある（トラステッドの
-        // ホームクリックでも即消えないことを実機確認）。更新直後の再点灯で
-        // 「押しても消えない」と誤解させないよう、スヌーズ中はドットを無視。
-        // スヌーズ期限は更新（＝リロード）をまたいで効くようsessionStorage。
-        let dotSnooze = 0;
-        try {
-          dotSnooze = parseInt(sessionStorage.getItem('xmr-dot-snooze') || '0', 10) || 0;
-        } catch (err) {}
-        const dotActive = !!homeDot && Date.now() > dotSnooze;
-        const show = (!!pill || dotActive) && !Grid.refreshing && Settings.newPostsBanner;
+        // 更新直後のスヌーズ中は、ドットもピルも無視して黙る（上の
+        // refreshHomeTimeline()末尾のコメント参照）。
+        const snoozed = Date.now() < (Grid.bannerSnoozeUntil || 0);
+        const show = (!!pill || !!homeDot) && !snoozed && !Grid.refreshing && Settings.newPostsBanner;
         if ((npBtn.style.display === 'none') === show) {
           npBtn.style.display = show ? 'block' : 'none';
           if (show) syncTabbarTop();
