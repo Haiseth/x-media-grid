@@ -339,7 +339,8 @@
     spaceHoldScrollPxPerSec: 1000, // Space長押し中の一定スクロール速度（単押しの滑らかスクロールの中間くらいを目安）
   };
   // 列数はユーザーが変更したら記憶する（実機フィードバック：設定が毎回
-  // リセットされるのは不便、の一環）
+  // リセットされるのは不便、の一環）。ここでの読み込みは起動直後の暫定値で、
+  // 場所ごとの値はグリッドを組み立てる時(activateGridInner)に読み直す。
   try {
     const savedCols = parseInt(localStorage.getItem('xmr-grid-cols'), 10);
     if (savedCols >= 1 && savedCols <= 10) CONFIG.gridCols = savedCols;
@@ -939,6 +940,27 @@
   function writeFilterSetting(base, value) {
     try {
       localStorage.setItem(filterStorageKey(base), value ? '1' : '0');
+    } catch (e) {}
+  }
+
+  // 列数も「未読のみ表示」等と同じく場所ごとに覚える。メディア欄は縦長の
+  // イラストが多いので列を多く、ホームは横長も混ざるので少なく、といった
+  // 使い分けが自然に出るため（実機フィードバック）。場所ごとの値が無ければ、
+  // 従来の全体共通キー(xmr-grid-cols)を読んで引き継ぐ。
+  const COLS_KEY = 'xmr-grid-cols';
+  function readGridCols(fallback) {
+    try {
+      const scoped = parseInt(localStorage.getItem(filterStorageKey(COLS_KEY)), 10);
+      if (scoped >= 1 && scoped <= 10) return scoped;
+      const legacy = parseInt(localStorage.getItem(COLS_KEY), 10);
+      if (legacy >= 1 && legacy <= 10) return legacy;
+    } catch (e) {}
+    return fallback;
+  }
+  function writeGridCols(value) {
+    try {
+      localStorage.setItem(filterStorageKey(COLS_KEY), String(value));
+      localStorage.setItem(COLS_KEY, String(value)); // 新しい場所を初めて開いた時の既定値として使う
     } catch (e) {}
   }
 
@@ -4369,6 +4391,9 @@
       toolbar.querySelector('.xmr-tb-group-config').appendChild(searchPeekBtn);
     }
     const colsInput = toolbar.querySelector('.xmr-cols-input');
+    // 場所（メディア欄／ホームの各タブ／いいね／ブックマーク／検索）ごとに
+    // 記憶した列数を読み直す。無ければ従来の全体共通値を引き継ぐ。
+    CONFIG.gridCols = readGridCols(CONFIG.gridCols);
     colsInput.value = CONFIG.gridCols;
     // Xの「N件のポストを表示」通知バナーはこのグリッドの裏に隠れて押せなくなる。
     // 単純なページリロードだと、Xがサーバーから返す初期タイムラインが
@@ -4399,9 +4424,7 @@
     colsInput.addEventListener('input', () => {
       const n = Math.max(1, Math.min(10, parseInt(colsInput.value, 10) || 1));
       CONFIG.gridCols = n;
-      try {
-        localStorage.setItem('xmr-grid-cols', String(n)); // 次回以降も同じ列数で
-      } catch (e) {}
+      writeGridCols(n); // 今いる場所（メディア/ホームの各タブ/いいね等）ごとに記憶
       grid.style.setProperty('--xmr-cols', n);
     });
 
