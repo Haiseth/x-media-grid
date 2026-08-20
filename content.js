@@ -3265,6 +3265,16 @@
   // ラベルで、クリック対象はその祖先の<button>（言語・文言・数字の有無に
   // 一切依存しない）。以前の「文言や見た目のヒューリスティック」は
   // 引用ツイートのヘッダー等を誤検出するリスクがあり全廃した。
+  // ピルの中身（投稿者アバターのURL群）による簡易指紋。ゾンビ判定に使う。
+  // 空（画像がまだ無い等）の場合も固定文字列を返し、datasetの真偽判定が
+  // 誤って偽にならないようにする。
+  function pillContentSig(label) {
+    const sig = [...label.querySelectorAll('img')]
+      .map((img) => img.getAttribute('src') || '')
+      .join('|');
+    return sig || '(no-imgs)';
+  }
+
   function findNewPostsPillButton(primary) {
     // 【実機で確定した罠】Xは非表示中のタブ（フォロー中等）のタイムラインも
     // DOMに保持しており、そちらにもpillLabelが存在し得る。当初は
@@ -3279,9 +3289,10 @@
     for (const label of labels) {
       // 【実機で確定・ゾンビピル】ホームリンク経由でTLを更新してもピル要素は
       // DOMに残り続けることがある（TL入れ替わり＋青ドット消灯後も残留を確認）。
-      // 更新完了時にxmrStalePillを付けて「消化済み」扱いにし、検出から外す。
-      // Xが新たな新着で作り直したピルは別要素（フラグ無し）なので再検出できる。
-      if (label.dataset.xmrStalePill) continue;
+      // 更新完了時に「その時点の中身の指紋」を付けて消化済み扱いにし、検出から
+      // 外す。Xが同じ要素を使い回して次の新着を告知する可能性に備え、指紋
+      // （投稿者アバターのURL群）が変わっていたら新しい告知として拾い直す。
+      if (label.dataset.xmrStalePill && label.dataset.xmrStalePill === pillContentSig(label)) continue;
       const btn = label.closest('button, [role="button"]');
       if (!btn) continue;
       let hidden = false;
@@ -3378,7 +3389,9 @@
       // （マークしないと更新直後にまたバナーが出て「更新できてない」ように
       // 見える）。Xが本当に次の新着で出し直すピルは別要素なので検出できる。
       if (pc2) {
-        for (const l of pc2.querySelectorAll('[data-testid="pillLabel"]')) l.dataset.xmrStalePill = '1';
+        for (const l of pc2.querySelectorAll('[data-testid="pillLabel"]')) {
+          l.dataset.xmrStalePill = pillContentSig(l);
+        }
       }
       // 事後検証：更新前に新着シグナル（ピル/青ドット）があったのに、先頭
       // ツイートが1件も変わっていない場合はホームクリックが効いていない
@@ -3405,6 +3418,7 @@
     },
     true
   );
+
 
   // 検索ボックスの経緯（長い）：
   // (1) v3.28.0で「検索ボックスを含むウィジェットだけ残し兄弟だけ隠す」を
@@ -4312,6 +4326,11 @@
       Grid.newPostsTimer = setInterval(() => {
         if (!Grid.active || Grid.mode !== 'home') return;
         const pill = findNewPostsPillButton(document.querySelector('[data-testid="primaryColumn"]'));
+        // 本物ピルの「穴あき表示」：ピルは合成クリックに反応しない（trusted
+        // 要求。実機確定）ため、代理クリックではなく本物をグリッドの上に
+        // 露出させ、ユーザー自身のトラステッドクリックをそのまま届かせる。
+        // ピルを内包する隠し要素をhard(display:none)→soft(visibility:hidden+
+        // 子孫のピルだけvisible)に差し替える。ピルが消えたら元に戻す。
         // 実機フィードバック：戻ってきた直後はキャッシュ復元のため、Xが
         // ピルを出さずに新着を抱えているケース（ホームアイコンに青ドット
         // だけ付く）がある。ドットのDOM上の存在（ナビリンク内のsvgの後ろの
