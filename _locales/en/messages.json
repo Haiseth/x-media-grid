@@ -1,0 +1,435 @@
+{
+  "extDescription": {
+    "message": "Turn X's media tab, home & likes into an image grid. Like, bookmark & repost without opening posts. Display-only, no automation."
+  },
+  "imageOnlyLabel": {
+    "message": "Images only ($SCOPE$)",
+    "placeholders": {
+      "scope": {
+        "content": "$1",
+        "example": "Bookmarks"
+      }
+    }
+  },
+  "scopeBookmarks": {
+    "message": "Bookmarks"
+  },
+  "scopeMedia": {
+    "message": "Media"
+  },
+  "scopeLikes": {
+    "message": "Likes"
+  },
+  "scopeSearch": {
+    "message": "Search results"
+  },
+  "overlayHint": {
+    "message": "$MOVE$ Move / $OPEN$ Zoom · Back / Esc Close",
+    "placeholders": {
+      "move": {
+        "content": "$1",
+        "example": "WASD"
+      },
+      "open": {
+        "content": "$2",
+        "example": "Q"
+      }
+    }
+  },
+  "overlayCloseButton": {
+    "message": "Close ($KEY$)",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "Q"
+      }
+    }
+  },
+  "viewerOpenAuthorPage": {
+    "message": "Open @$USER$'s page",
+    "placeholders": {
+      "user": {
+        "content": "$1",
+        "example": "username"
+      }
+    }
+  },
+  "viewerLike": {
+    "message": "Like"
+  },
+  "viewerBookmark": {
+    "message": "Bookmark"
+  },
+  "viewerRepost": {
+    "message": "Repost"
+  },
+  "viewerReply": {
+    "message": "Reply"
+  },
+  "withKey": {
+    "message": "$LABEL$ ($KEY$ key)",
+    "placeholders": {
+      "label": {
+        "content": "$1",
+        "example": "Like / unlike"
+      },
+      "key": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "titleLikeToggle": {
+    "message": "Like / unlike"
+  },
+  "titleBookmarkToggle": {
+    "message": "Bookmark / remove"
+  },
+  "titleRepostToggle": {
+    "message": "Repost / undo"
+  },
+  "titleReply": {
+    "message": "Reply"
+  },
+  "viewerOpenPost": {
+    "message": "Open this post ($KEY$)",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "R"
+      }
+    }
+  },
+  "viewerOpenAccountMedia": {
+    "message": "Open this account ($KEY$)",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "F"
+      }
+    }
+  },
+  "toastLiked": {
+    "message": "Liked"
+  },
+  "toastUnliked": {
+    "message": "Unliked"
+  },
+  "toastBookmarked": {
+    "message": "Bookmarked"
+  },
+  "toastBookmarkRemoved": {
+    "message": "Bookmark removed"
+  },
+  "toastReposted": {
+    "message": "Reposted"
+  },
+  "toastRepostRemoved": {
+    "message": "Repost removed"
+  },
+  "toastDone": {
+    "message": "Done"
+  },
+  "toastSearchUnsupported": {
+    "message": "Actions can't be run directly from search results (press $KEY$ to open the tweet and act there)",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "R"
+      }
+    }
+  },
+  "toastRelocateFailed": {
+    "message": "Could not re-locate the original post (press $KEY$ to open the tweet and act there)",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "R"
+      }
+    }
+  },
+  "toastNoSelection": {
+    "message": "No post is selected"
+  },
+  "toastActionButtonNotFound": {
+    "message": "Could not find the action button"
+  },
+  "toastRepostButtonNotFound": {
+    "message": "Could not find the repost button"
+  },
+  "toastRepostConfirmNotFound": {
+    "message": "Could not find the repost confirmation button"
+  },
+  "toastReplyButtonNotFound": {
+    "message": "Could not find the reply button"
+  },
+  "toastReplyOpenFailed": {
+    "message": "Could not open the reply composer"
+  },
+  "filterUnread": {
+    "message": "Unread only"
+  },
+  "filterVideoOnly": {
+    "message": "Videos only"
+  },
+  "noText": {
+    "message": "(no text)"
+  },
+  "refreshing": {
+    "message": "Refreshing…"
+  },
+  "loading": {
+    "message": "Loading…"
+  },
+  "toolbarLikes": {
+    "message": "Likes"
+  },
+  "toolbarBookmarks": {
+    "message": "Bookmarks"
+  },
+  "toolbarRefresh": {
+    "message": "Refresh"
+  },
+  "toolbarCols": {
+    "message": "Columns"
+  },
+  "toolbarSettings": {
+    "message": "Settings"
+  },
+  "toolbarSettingsTitle": {
+    "message": "Settings & keyboard shortcuts"
+  },
+  "toolbarThisAccount": {
+    "message": "This account:"
+  },
+  "toolbarSearch": {
+    "message": "Search"
+  },
+  "pillPhotos": {
+    "message": "Photos"
+  },
+  "pillVideos": {
+    "message": "Videos"
+  },
+  "optTitle": {
+    "message": "X Media Grid - Settings"
+  },
+  "optSub": {
+    "message": "Display settings and keyboard shortcuts"
+  },
+  "optDisplayHeading": {
+    "message": "Display settings"
+  },
+  "optHideSidebarLabel": {
+    "message": "Hide the right sidebar while the grid is shown"
+  },
+  "optHideSidebarDesc1": {
+    "message": "Default: off (the sidebar stays visible)."
+  },
+  "optHideSidebarDesc2": {
+    "message": "On: hides the sidebar so the grid can use the extra width. A \"Search\" button appears in the toolbar instead; pressing it shows the sidebar temporarily, just for searching."
+  },
+  "optTileActionsLabel": {
+    "message": "Show action buttons when hovering over a tile"
+  },
+  "optTileActionsDesc": {
+    "message": "Default: on. \"♥ / 🔖 / 💬\" buttons (like, bookmark, reply) appear at the top right of each image in the grid. Turn this off if you prefer keyboard-only use."
+  },
+  "optSaved": {
+    "message": "Saved"
+  },
+  "optKeysHeading": {
+    "message": "Keyboard shortcuts"
+  },
+  "optKeyMoveUp": {
+    "message": "Move up (the ↑ key always works too)"
+  },
+  "optKeyMoveDown": {
+    "message": "Move down (the ↓ key always works too)"
+  },
+  "optKeyMoveLeft": {
+    "message": "Move left; previous image in multi-image posts (the ← key always works too)"
+  },
+  "optKeyMoveRight": {
+    "message": "Move right; next image in multi-image posts (the → key always works too)"
+  },
+  "optKeyOpenClose": {
+    "message": "Open (zooms a single image directly, opens the list for multiple images) / close · go back one level"
+  },
+  "optKeySpace": {
+    "message": "In the grid, smoothly scrolls about one screen; in a multi-image list, shows the selected image on its own"
+  },
+  "optKeyEsc": {
+    "message": "Close"
+  },
+  "optKeyOpenTweet": {
+    "message": "Open the post (in the same tab; going back restores your spot)"
+  },
+  "optKeyOpenMedia": {
+    "message": "Open the author's page (destination is chosen in Display settings above)"
+  },
+  "optKeyLike": {
+    "message": "Like"
+  },
+  "optKeyBookmark": {
+    "message": "Bookmark"
+  },
+  "optKeyReply": {
+    "message": "Reply (opens X's reply composer in place; you type and send it yourself as usual)"
+  },
+  "optKeyRetweet": {
+    "message": "Repost / undo (a plain repost, not a quote; to quote, open the tweet first)"
+  },
+  "optKeyRefresh": {
+    "message": "Refresh Home (\"For you\" tab only)"
+  },
+  "optKeyProfileToMedia": {
+    "message": "On a profile page, go to that account's media page"
+  },
+  "optKeyNotInterested": {
+    "message": "Open the \"•••\" menu of the hovered post (while it is open: move within the menu with the up/down keys (default W/S), select with Space, close with the open/close key (default Q))"
+  },
+  "optKeyGoHome": {
+    "message": "Go back to Home (no new tab; same as clicking the real Home icon in the same tab)"
+  },
+  "optResetKeys": {
+    "message": "Reset key bindings to defaults"
+  },
+  "optNoteFixed": {
+    "message": "Space, Esc and the arrow keys are fixed. Everything else is saved automatically when you type a single character into the fields above (duplicates are not allowed)."
+  },
+  "optNoteBlank1": {
+    "message": "For keys other than the five movement/open-close keys, "
+  },
+  "optNoteBlank2": {
+    "message": "leaving the field blank means \"no key assigned\""
+  },
+  "optNoteBlank3": {
+    "message": " and that feature will no longer respond to any key (e.g. to prevent accidental reposts if you never repost)."
+  },
+  "optAboutBadge": {
+    "message": "About this extension"
+  },
+  "optAboutIntro": {
+    "message": "This extension turns X (formerly Twitter) media, likes, bookmarks and Home into a grid of images you can browse quickly with the keyboard alone. Liking, bookmarking, following and more take a single key. The main features, in order of importance:"
+  },
+  "optFeat1H": {
+    "message": "1. Grid view"
+  },
+  "optFeat1a": {
+    "message": "Converts media pages, your likes history, bookmarks and Home (with \"Images only\" on) into a Pinterest-style image grid."
+  },
+  "optFeat1b": {
+    "message": "Move the selection with W/A/S/D (or the arrow keys), open/close with Q, and use Space to scroll a screenful or zoom an image."
+  },
+  "optFeat1c": {
+    "message": "The number of grid columns can be changed from the toolbar."
+  },
+  "optFeat2H": {
+    "message": "2. Images only"
+  },
+  "optFeat2a": {
+    "message": "On Home and Bookmarks, a button toggles whether posts without images are filtered out and the rest shown as a grid."
+  },
+  "optFeat2b": {
+    "message": "Home remembers this per tab (\"For you\", \"Following\", ...), separately from Bookmarks."
+  },
+  "optFeat3H": {
+    "message": "3. Multi-image posts"
+  },
+  "optFeat3a": {
+    "message": "Click (or press Q) to see every image in the post laid out large from the start. Space enlarges one image further; A/D steps through them."
+  },
+  "optFeat4H": {
+    "message": "4. Unread-only and videos-only filters"
+  },
+  "optFeat4a": {
+    "message": "Buttons in the grid narrow it down to only posts you haven't seen, or only video posts."
+  },
+  "optFeat5H": {
+    "message": "5. \"Photos\" / \"Videos\" switch on media pages"
+  },
+  "optFeat5a": {
+    "message": "Media pages open with photos by default, and a button at the top switches to a videos-only view."
+  },
+  "optFeat6H": {
+    "message": "6. Profile card"
+  },
+  "optFeat6a": {
+    "message": "A small card with the avatar, name, bio, follow counts and a follow button is shown at the top of media pages."
+  },
+  "optFeat7H": {
+    "message": "7. Keyboard shortcuts (remappable)"
+  },
+  "optFeat7a": {
+    "message": "Open a post, open the author's media page, like, bookmark, refresh Home, open the menu, or go back to Home — each with a single key."
+  },
+  "optFeat7b": {
+    "message": "Even on the normal timeline (without the grid), WASDQ selects posts for the same operations."
+  },
+  "optFeat8H": {
+    "message": "8. Other"
+  },
+  "optFeat8a": {
+    "message": "The right sidebar can also be shown or hidden (see the settings on the left)."
+  },
+  "optErrRequired": {
+    "message": "$NAME$ is a required movement/open-close key and cannot be left blank",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "moveUp"
+      }
+    }
+  },
+  "optErrSpace": {
+    "message": "Space cannot be assigned because it conflicts with the fixed scroll action"
+  },
+  "optErrDuplicate": {
+    "message": "\"$CHAR$\" is used by both $FIRST$ and $SECOND$",
+    "placeholders": {
+      "char": {
+        "content": "$1",
+        "example": "w"
+      },
+      "first": {
+        "content": "$2",
+        "example": "moveUp"
+      },
+      "second": {
+        "content": "$3",
+        "example": "like"
+      }
+    }
+  },
+  "optFTargetLabel": {
+    "message": "Destination of the author-page key (F)"
+  },
+  "optFTargetProfile": {
+    "message": "Profile (posts)"
+  },
+  "optFTargetMedia": {
+    "message": "Media tab (photos)"
+  },
+  "optFTargetDesc": {
+    "message": "Default: profile. Choose \"Media tab\" to jump straight to their photos."
+  },
+  "optAccentLabel": {
+    "message": "Accent color"
+  },
+  "optAccentDesc": {
+    "message": "Default: X's blue. Changes the selection outline, tab underline, buttons, and other accents at once."
+  },
+  "optSeenColorLabel": {
+    "message": "Seen color"
+  },
+  "optSeenColorDesc": {
+    "message": "Posts you've already seen get this color on the strip under the tile (a marker of how far you've read; recorded when you refresh or navigate away). Default is a theme-matched blue."
+  },
+  "optColorReset": {
+    "message": "Reset"
+  },
+  "extName": {
+    "message": "X Media Grid"
+  }
+}

@@ -1,0 +1,435 @@
+{
+  "extDescription": {
+    "message": "Xのメディア欄・ホーム・いいねを画像グリッドに変え、投稿を開かずにいいね・ブックマーク・リポスト。キーボードだけでサクサク絵を見て回れる閲覧特化ツール（表示専用・自動操作なし）"
+  },
+  "imageOnlyLabel": {
+    "message": "画像のみ表示($SCOPE$)",
+    "placeholders": {
+      "scope": {
+        "content": "$1",
+        "example": "ブックマーク"
+      }
+    }
+  },
+  "scopeBookmarks": {
+    "message": "ブックマーク"
+  },
+  "scopeMedia": {
+    "message": "メディア"
+  },
+  "scopeLikes": {
+    "message": "いいね"
+  },
+  "scopeSearch": {
+    "message": "検索結果"
+  },
+  "overlayHint": {
+    "message": "$MOVE$ 移動 / $OPEN$ 拡大・戻る / Esc 閉じる",
+    "placeholders": {
+      "move": {
+        "content": "$1",
+        "example": "WASD"
+      },
+      "open": {
+        "content": "$2",
+        "example": "Q"
+      }
+    }
+  },
+  "overlayCloseButton": {
+    "message": "閉じる ($KEY$)",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "Q"
+      }
+    }
+  },
+  "viewerOpenAuthorPage": {
+    "message": "@$USER$ のページを開く",
+    "placeholders": {
+      "user": {
+        "content": "$1",
+        "example": "username"
+      }
+    }
+  },
+  "viewerLike": {
+    "message": "いいね"
+  },
+  "viewerBookmark": {
+    "message": "ブックマーク"
+  },
+  "viewerRepost": {
+    "message": "リポスト"
+  },
+  "viewerReply": {
+    "message": "リプライ"
+  },
+  "withKey": {
+    "message": "$LABEL$（$KEY$キー）",
+    "placeholders": {
+      "label": {
+        "content": "$1",
+        "example": "いいね/解除"
+      },
+      "key": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "titleLikeToggle": {
+    "message": "いいね/解除"
+  },
+  "titleBookmarkToggle": {
+    "message": "ブックマーク/解除"
+  },
+  "titleRepostToggle": {
+    "message": "リポスト/解除"
+  },
+  "titleReply": {
+    "message": "リプライ"
+  },
+  "viewerOpenPost": {
+    "message": "このポストを開く（$KEY$）",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "R"
+      }
+    }
+  },
+  "viewerOpenAccountMedia": {
+    "message": "このアカウントを開く（$KEY$）",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "F"
+      }
+    }
+  },
+  "toastLiked": {
+    "message": "いいねしました"
+  },
+  "toastUnliked": {
+    "message": "いいねを解除しました"
+  },
+  "toastBookmarked": {
+    "message": "ブックマークしました"
+  },
+  "toastBookmarkRemoved": {
+    "message": "ブックマークを解除しました"
+  },
+  "toastReposted": {
+    "message": "リポストしました"
+  },
+  "toastRepostRemoved": {
+    "message": "リポストを解除しました"
+  },
+  "toastDone": {
+    "message": "実行しました"
+  },
+  "toastSearchUnsupported": {
+    "message": "検索結果の一覧からは直接実行できません（$KEY$キーでツイートを開いて操作できます）",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "R"
+      }
+    }
+  },
+  "toastRelocateFailed": {
+    "message": "元の投稿を再表示できませんでした（$KEY$キーでツイートを開いて操作できます）",
+    "placeholders": {
+      "key": {
+        "content": "$1",
+        "example": "R"
+      }
+    }
+  },
+  "toastNoSelection": {
+    "message": "投稿が選択されていません"
+  },
+  "toastActionButtonNotFound": {
+    "message": "操作ボタンが見つかりませんでした"
+  },
+  "toastRepostButtonNotFound": {
+    "message": "リポストボタンが見つかりませんでした"
+  },
+  "toastRepostConfirmNotFound": {
+    "message": "リポストの確認ボタンが見つかりませんでした"
+  },
+  "toastReplyButtonNotFound": {
+    "message": "リプライボタンが見つかりませんでした"
+  },
+  "toastReplyOpenFailed": {
+    "message": "リプライ画面を開けませんでした"
+  },
+  "filterUnread": {
+    "message": "未読のみ表示"
+  },
+  "filterVideoOnly": {
+    "message": "動画のみ表示"
+  },
+  "noText": {
+    "message": "(本文なし)"
+  },
+  "refreshing": {
+    "message": "更新中…"
+  },
+  "loading": {
+    "message": "読み込み中…"
+  },
+  "toolbarLikes": {
+    "message": "いいね"
+  },
+  "toolbarBookmarks": {
+    "message": "ブックマーク"
+  },
+  "toolbarRefresh": {
+    "message": "更新"
+  },
+  "toolbarCols": {
+    "message": "列数"
+  },
+  "toolbarSettings": {
+    "message": "設定"
+  },
+  "toolbarSettingsTitle": {
+    "message": "設定・キー操作一覧"
+  },
+  "toolbarThisAccount": {
+    "message": "このアカウント:"
+  },
+  "toolbarSearch": {
+    "message": "検索"
+  },
+  "pillPhotos": {
+    "message": "画像"
+  },
+  "pillVideos": {
+    "message": "動画"
+  },
+  "optTitle": {
+    "message": "Xメディアグリッド - 設定"
+  },
+  "optSub": {
+    "message": "表示設定とキー操作の一覧"
+  },
+  "optDisplayHeading": {
+    "message": "表示設定"
+  },
+  "optHideSidebarLabel": {
+    "message": "グリッド表示中は右サイドバーを隠す"
+  },
+  "optHideSidebarDesc1": {
+    "message": "初期値：オフ（サイドバーはそのまま表示）。"
+  },
+  "optHideSidebarDesc2": {
+    "message": "オン：サイドバーを隠して横幅をグリッドに使う。代わりにツールバーに「検索」ボタンが出て、押すと検索の時だけ一時的にサイドバーを表示します。"
+  },
+  "optTileActionsLabel": {
+    "message": "タイルにマウスを乗せた時に操作ボタンを表示"
+  },
+  "optTileActionsDesc": {
+    "message": "初期値：オン。グリッドの各画像の右上に「♥ / 🔖 / 💬」（いいね・ブックマーク・リプライ）のボタンが出ます。キー操作派で不要ならオフに。"
+  },
+  "optSaved": {
+    "message": "保存しました"
+  },
+  "optKeysHeading": {
+    "message": "キー操作一覧"
+  },
+  "optKeyMoveUp": {
+    "message": "上へ移動（↑キーも常に有効）"
+  },
+  "optKeyMoveDown": {
+    "message": "下へ移動（↓キーも常に有効）"
+  },
+  "optKeyMoveLeft": {
+    "message": "左へ移動・複数画像は前の画像（←キーも常に有効）"
+  },
+  "optKeyMoveRight": {
+    "message": "右へ移動・複数画像は次の画像（→キーも常に有効）"
+  },
+  "optKeyOpenClose": {
+    "message": "開く（1枚ならそのまま拡大、複数なら一覧へ）／閉じる・1つ戻る"
+  },
+  "optKeySpace": {
+    "message": "グリッド一覧では1画面分くらい滑らかにスクロール／複数画像の一覧では選択中の1枚を単独表示"
+  },
+  "optKeyEsc": {
+    "message": "閉じる"
+  },
+  "optKeyOpenTweet": {
+    "message": "そのツイートを開く（同じタブで即表示。戻ると元の位置に復帰）"
+  },
+  "optKeyOpenMedia": {
+    "message": "その投稿者のページを開く（行き先は上の表示設定で選択）"
+  },
+  "optKeyLike": {
+    "message": "いいね"
+  },
+  "optKeyBookmark": {
+    "message": "ブックマーク"
+  },
+  "optKeyReply": {
+    "message": "リプライ（Xの返信入力画面がその場で開く。入力・送信は通常通り自分で行う）"
+  },
+  "optKeyRetweet": {
+    "message": "リポスト／解除（引用ではなく通常のリポスト。引用したい時はツイートを開いてから）"
+  },
+  "optKeyRefresh": {
+    "message": "ホームを更新（「おすすめ」タブのみ）"
+  },
+  "optKeyProfileToMedia": {
+    "message": "プロフィールページでそのアカウントのメディア欄へ移動"
+  },
+  "optKeyNotInterested": {
+    "message": "ホバー中のポストの「•••」メニューを開く（開いている間は上下移動キー（初期値W/S）でメニュー内を移動、Spaceで選択、開閉キー（初期値Q）で閉じる）"
+  },
+  "optKeyGoHome": {
+    "message": "ホームへ戻る（新しいタブは開かず、同じタブ内で本物のホームアイコンを押すのと同じ）"
+  },
+  "optResetKeys": {
+    "message": "キー割り当てを初期値に戻す"
+  },
+  "optNoteFixed": {
+    "message": "Space・Esc・矢印キーは固定です。それ以外は上の表の入力欄に1文字のキーを入力すると自動保存されます（他のキーと重複はできません）。"
+  },
+  "optNoteBlank1": {
+    "message": "移動・開閉の5つ以外は"
+  },
+  "optNoteBlank2": {
+    "message": "空欄にすると「割り当てなし」"
+  },
+  "optNoteBlank3": {
+    "message": "になり、その機能はキーでは動かなくなります（例：リポストを使わない人の誤爆防止）。"
+  },
+  "optAboutBadge": {
+    "message": "この拡張機能について"
+  },
+  "optAboutIntro": {
+    "message": "X（旧Twitter）のメディア/いいね/ブックマーク/ホームを、画像がずらっと並ぶグリッド表示に変えて、キーボードだけでサクサク見て回れるようにする拡張機能です。いいね・ブックマーク・フォローなども1キーで行えます。以下、主な機能を重要な順に紹介します。"
+  },
+  "optFeat1H": {
+    "message": "1. グリッド表示"
+  },
+  "optFeat1a": {
+    "message": "メディア欄・いいねの履歴・ブックマーク・ホーム（「画像のみ表示」ON時）を、画像が並ぶグリッド（Pinterest風）に変換します。"
+  },
+  "optFeat1b": {
+    "message": "W/A/S/D（または矢印キー）で選択を移動、Qで開く/閉じる、Spaceで1画面分スクロールや画像の拡大ができます。"
+  },
+  "optFeat1c": {
+    "message": "グリッドの列数はツールバーからお好みで変更できます。"
+  },
+  "optFeat2H": {
+    "message": "2. 画像のみ表示"
+  },
+  "optFeat2a": {
+    "message": "ホーム／ブックマークでは、画像の無い投稿を除いてグリッド化するかどうかをボタンでON/OFFできます。"
+  },
+  "optFeat2b": {
+    "message": "ホームは「おすすめ」「フォロー中」等のタブごとに、ブックマークとは別々に設定を覚えます。"
+  },
+  "optFeat3H": {
+    "message": "3. 複数画像の投稿"
+  },
+  "optFeat3a": {
+    "message": "クリック（またはQ）すると、投稿内の画像が最初から全部大きく並んで表示されます。Spaceで1枚をさらに大きく表示、A/Dで送れます。"
+  },
+  "optFeat4H": {
+    "message": "4. 未読のみ表示・動画のみ表示"
+  },
+  "optFeat4a": {
+    "message": "グリッド内のボタンで、まだ見ていない投稿だけ・動画の投稿だけに絞り込めます。"
+  },
+  "optFeat5H": {
+    "message": "5. メディア欄の「画像」「動画」切り替え"
+  },
+  "optFeat5a": {
+    "message": "メディア欄を開くと画像がデフォルトで表示され、上部のボタンで動画だけの表示にも切り替えられます。"
+  },
+  "optFeat6H": {
+    "message": "6. プロフィールカード"
+  },
+  "optFeat6a": {
+    "message": "メディア欄の先頭に、アイコン・名前・自己紹介・フォロー数などをまとめた小さなカードとフォローボタンを表示します。"
+  },
+  "optFeat7H": {
+    "message": "7. キーボードショートカット（リマップ可）"
+  },
+  "optFeat7a": {
+    "message": "投稿を開く／その人のメディア欄を開く／いいね／ブックマーク／ホーム更新／メニューを開く／ホームへ戻る、が1キーで行えます。"
+  },
+  "optFeat7b": {
+    "message": "グリッドを使っていない通常のタイムラインでも、WASDQで投稿を選んで同じ操作ができます。"
+  },
+  "optFeat8H": {
+    "message": "8. その他"
+  },
+  "optFeat8a": {
+    "message": "右サイドバーの表示/非表示も切り替え可能です（左の設定を参照）。"
+  },
+  "optErrRequired": {
+    "message": "$NAME$は移動・開閉の必須キーのため空欄にできません",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "moveUp"
+      }
+    }
+  },
+  "optErrSpace": {
+    "message": "スペースは固定のスクロール操作と衝突するため割り当てられません"
+  },
+  "optErrDuplicate": {
+    "message": "「$CHAR$」が$FIRST$と$SECOND$で重複しています",
+    "placeholders": {
+      "char": {
+        "content": "$1",
+        "example": "w"
+      },
+      "first": {
+        "content": "$2",
+        "example": "moveUp"
+      },
+      "second": {
+        "content": "$3",
+        "example": "like"
+      }
+    }
+  },
+  "optFTargetLabel": {
+    "message": "Fキー（投稿者ページ）の行き先"
+  },
+  "optFTargetProfile": {
+    "message": "プロフィール（ポスト一覧）"
+  },
+  "optFTargetMedia": {
+    "message": "メディア欄（画像一覧）"
+  },
+  "optFTargetDesc": {
+    "message": "初期値：プロフィール（ポスト一覧）。画像だけを追いたい人は「メディア欄」に変更してください。"
+  },
+  "optAccentLabel": {
+    "message": "アクセント色"
+  },
+  "optAccentDesc": {
+    "message": "初期値：Xと同じ青。選択中の枠線・タブの下線・ボタン等の青系をまとめて変更できます。"
+  },
+  "optSeenColorLabel": {
+    "message": "既読の色"
+  },
+  "optSeenColorDesc": {
+    "message": "一度見た投稿は、タイル下の帯がこの色になります（どこまで読んだかの目印。既読の記録は更新やページ移動のタイミングで付きます）。初期値はテーマに合わせた青系。"
+  },
+  "optColorReset": {
+    "message": "初期値に戻す"
+  },
+  "extName": {
+    "message": "Xメディアグリッド"
+  }
+}

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title data-i18n="optTitle">Xメディアグリッド - 設定</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif;
+    background: #000;
+    color: rgb(231, 233, 234);
+    margin: 0;
+    padding: 24px 28px 60px;
+  }
+  .xmr-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 48px;
+    max-width: 1200px;
+  }
+  .xmr-col-left {
+    max-width: 560px;
+    flex-shrink: 0;
+  }
+  .xmr-col-right {
+    flex: 1;
+    min-width: 320px;
+    max-width: 640px;
+    border-left: 1px solid rgba(239, 243, 244, 0.12);
+    padding-left: 40px;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .xmr-sub { font-size: 12px; color: rgba(239, 243, 244, 0.5); margin: 0 0 24px; }
+  h2 { font-size: 14px; margin: 28px 0 10px; color: rgba(239, 243, 244, 0.9); }
+  h3 { font-size: 12.5px; margin: 18px 0 6px; color: rgb(29, 155, 240); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table td { padding: 6px 8px; border-bottom: 1px solid rgba(239, 243, 244, 0.08); }
+  table td:first-child {
+    width: 90px;
+    font-weight: 700;
+    color: rgb(29, 155, 240);
+    white-space: nowrap;
+  }
+  .xmr-note {
+    margin-top: 24px;
+    padding: 12px 14px;
+    background: rgba(29, 155, 240, 0.08);
+    border: 1px solid rgba(29, 155, 240, 0.25);
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: rgba(239, 243, 244, 0.85);
+  }
+  .xmr-saved {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 12px;
+    color: rgb(139, 180, 219);
+    opacity: 0;
+    transition: opacity 200ms;
+  }
+  .xmr-saved.xmr-show { opacity: 1; }
+  .xmr-key-input {
+    width: 32px;
+    text-align: center;
+    background: rgba(239, 243, 244, 0.08);
+    border: 1px solid rgba(239, 243, 244, 0.2);
+    border-radius: 4px;
+    color: rgb(231, 233, 234);
+    font-size: 13px;
+    padding: 3px 0;
+    text-transform: lowercase;
+  }
+  .xmr-ftarget-select {
+    background: rgba(239, 243, 244, 0.08);
+    color: rgb(231, 233, 234);
+    border: 1px solid rgba(239, 243, 244, 0.2);
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 12px;
+  }
+  .xmr-color-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .xmr-color-cell input[type="color"] {
+    width: 44px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid rgba(239, 243, 244, 0.2);
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .xmr-color-reset {
+    background: transparent;
+    border: none;
+    color: rgba(139, 180, 219, 0.9);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 0;
+  }
+  .xmr-key-input.xmr-key-error {
+    border-color: rgb(244, 33, 46);
+  }
+  .xmr-key-error-msg {
+    color: rgb(244, 33, 46);
+    font-size: 11px;
+    margin-top: 6px;
+  }
+  .xmr-reset-btn {
+    margin-top: 10px;
+    background: transparent;
+    border: 1px solid rgba(239, 243, 244, 0.25);
+    color: rgba(239, 243, 244, 0.8);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .xmr-reset-btn:hover {
+    background: rgba(239, 243, 244, 0.08);
+  }
+  label.xmr-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(239, 243, 244, 0.1);
+    cursor: pointer;
+  }
+  label.xmr-row input[type="checkbox"] { margin-top: 2px; }
+  .xmr-row-text { font-size: 13px; }
+  .xmr-row-desc { font-size: 12px; color: rgba(239, 243, 244, 0.55); margin-top: 2px; }
+  .xmr-summary p { font-size: 12.5px; line-height: 1.7; color: rgba(239, 243, 244, 0.85); margin: 0 0 8px; }
+  .xmr-summary ul { margin: 0 0 8px; padding-left: 18px; }
+  .xmr-summary li { font-size: 12.5px; line-height: 1.7; color: rgba(239, 243, 244, 0.85); margin-bottom: 4px; }
+  .xmr-summary li b { color: rgb(239, 243, 244); }
+  .xmr-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(29, 155, 240, 0.15);
+    color: rgb(29, 155, 240);
+    margin-bottom: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="xmr-layout">
+  <div class="xmr-col-left">
+  <h1 data-i18n="extName">Xメディアグリッド</h1>
+  <p class="xmr-sub" data-i18n="optSub">表示設定とキー操作の一覧</p>
+
+  <h2 data-i18n="optDisplayHeading">表示設定</h2>
+  <label class="xmr-row">
+    <input type="checkbox" id="hideSidebar">
+    <span>
+      <span class="xmr-row-text" data-i18n="optHideSidebarLabel">グリッド表示中は右サイドバーを隠す</span>
+      <span class="xmr-row-desc">
+        <span data-i18n="optHideSidebarDesc1">初期値：オフ（サイドバーはそのまま表示）。</span><br>
+        <span data-i18n="optHideSidebarDesc2">オン：サイドバーを隠して横幅をグリッドに使う。代わりにツールバーに
+        「検索」ボタンが出て、押すと検索の時だけ一時的にサイドバーを表示します。</span>
+      </span>
+    </span>
+  </label>
+  <label class="xmr-row">
+    <input type="checkbox" id="tileActions">
+    <span>
+      <span class="xmr-row-text" data-i18n="optTileActionsLabel">タイルにマウスを乗せた時に操作ボタンを表示</span>
+      <span class="xmr-row-desc" data-i18n="optTileActionsDesc">
+        初期値：オン。グリッドの各画像の右上に「♥ / 🔖 / 💬」
+        （いいね・ブックマーク・リプライ）のボタンが出ます。
+        キー操作派で不要ならオフに。
+      </span>
+    </span>
+  </label>
+  <label class="xmr-row">
+    <select id="fTarget" class="xmr-ftarget-select">
+      <option value="profile" data-i18n="optFTargetProfile">プロフィール（ポスト一覧）</option>
+      <option value="media" data-i18n="optFTargetMedia">メディア欄（画像一覧）</option>
+    </select>
+    <span>
+      <span class="xmr-row-text" data-i18n="optFTargetLabel">Fキー（投稿者ページ）の行き先</span>
+      <span class="xmr-row-desc" data-i18n="optFTargetDesc">
+        初期値：プロフィール（ポスト一覧）。画像だけを追いたい人は
+        「メディア欄」に変更してください。
+      </span>
+    </span>
+  </label>
+  <label class="xmr-row">
+    <span class="xmr-color-cell">
+      <input type="color" id="accentColor" value="#1d9bf0">
+      <button type="button" class="xmr-color-reset" id="accentColorReset" data-i18n="optColorReset">初期値に戻す</button>
+    </span>
+    <span>
+      <span class="xmr-row-text" data-i18n="optAccentLabel">アクセント色</span>
+      <span class="xmr-row-desc" data-i18n="optAccentDesc">
+        初期値：Xと同じ青。選択中の枠線・タブの下線・ボタン等の青系を
+        まとめて変更できます。
+      </span>
+    </span>
+  </label>
+  <label class="xmr-row">
+    <span class="xmr-color-cell">
+      <input type="color" id="seenColor" value="#1c3a56">
+      <button type="button" class="xmr-color-reset" id="seenColorReset" data-i18n="optColorReset">初期値に戻す</button>
+    </span>
+    <span>
+      <span class="xmr-row-text" data-i18n="optSeenColorLabel">既読の色</span>
+      <span class="xmr-row-desc" data-i18n="optSeenColorDesc">
+        一度見た投稿は、タイル下の帯がこの色になります（どこまで読んだかの
+        目印。既読の記録は更新やページ移動のタイミングで付きます）。
+        初期値はテーマに合わせた青系。
+      </span>
+    </span>
+  </label>
+  <span id="saved" class="xmr-saved" data-i18n="optSaved">保存しました</span>
+
+  <h2 data-i18n="optKeysHeading">キー操作一覧</h2>
+  <table>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-moveUp" maxlength="1"></td>
+      <td data-i18n="optKeyMoveUp">上へ移動（↑キーも常に有効）</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-moveDown" maxlength="1"></td>
+      <td data-i18n="optKeyMoveDown">下へ移動（↓キーも常に有効）</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-moveLeft" maxlength="1"></td>
+      <td data-i18n="optKeyMoveLeft">左へ移動・複数画像は前の画像（←キーも常に有効）</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-moveRight" maxlength="1"></td>
+      <td data-i18n="optKeyMoveRight">右へ移動・複数画像は次の画像（→キーも常に有効）</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-openClose" maxlength="1"></td>
+      <td data-i18n="optKeyOpenClose">開く（1枚ならそのまま拡大、複数なら一覧へ）／閉じる・1つ戻る</td>
+    </tr>
+    <tr><td>Space</td><td data-i18n="optKeySpace">グリッド一覧では1画面分くらい滑らかにスクロール／複数画像の一覧では選択中の1枚を単独表示</td></tr>
+    <tr><td>Esc</td><td data-i18n="optKeyEsc">閉じる</td></tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-openTweet" maxlength="1"></td>
+      <td data-i18n="optKeyOpenTweet">そのツイートを開く（同じタブで即表示。戻ると元の位置に復帰）</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-openMedia" maxlength="1"></td>
+      <td data-i18n="optKeyOpenMedia">その投稿者のページを開く（行き先は上の表示設定で選択）</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-like" maxlength="1"></td>
+      <td data-i18n="optKeyLike">いいね</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-bookmark" maxlength="1"></td>
+      <td data-i18n="optKeyBookmark">ブックマーク</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-reply" maxlength="1"></td>
+      <td data-i18n="optKeyReply">リプライ（Xの返信入力画面がその場で開く。入力・送信は通常通り自分で行う）</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-retweet" maxlength="1"></td>
+      <td data-i18n="optKeyRetweet">リポスト／解除（引用ではなく通常のリポスト。引用したい時はツイートを開いてから）</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-refresh" maxlength="1"></td>
+      <td data-i18n="optKeyRefresh">ホームを更新（「おすすめ」タブのみ）</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-profileToMedia" maxlength="1"></td>
+      <td data-i18n="optKeyProfileToMedia">プロフィールページでそのアカウントのメディア欄へ移動</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-notInterested" maxlength="1"></td>
+      <td data-i18n="optKeyNotInterested">ホバー中のポストの「•••」メニューを開く（開いている間は上下移動キー（初期値W/S）でメニュー内を移動、Spaceで選択、開閉キー（初期値Q）で閉じる）</td>
+    </tr>
+    <tr>
+      <td><input type="text" class="xmr-key-input" id="key-goHome" maxlength="1"></td>
+      <td data-i18n="optKeyGoHome">ホームへ戻る（新しいタブは開かず、同じタブ内で本物のホームアイコンを押すのと同じ）</td>
+    </tr>
+  </table>
+  <div id="keyError" class="xmr-key-error-msg"></div>
+  <button type="button" id="resetKeys" class="xmr-reset-btn" data-i18n="optResetKeys">キー割り当てを初期値に戻す</button>
+
+  <div class="xmr-note">
+    <span data-i18n="optNoteFixed">Space・Esc・矢印キーは固定です。それ以外は上の表の入力欄に1文字の
+    キーを入力すると自動保存されます（他のキーと重複はできません）。</span><br>
+    <span data-i18n="optNoteBlank1">移動・開閉の5つ以外は</span><b data-i18n="optNoteBlank2">空欄にすると「割り当てなし」</b><span data-i18n="optNoteBlank3">になり、その
+    機能はキーでは動かなくなります（例：リポストを使わない人の誤爆防止）。</span>
+  </div>
+  </div>
+
+  <div class="xmr-col-right xmr-summary">
+    <span class="xmr-badge" data-i18n="optAboutBadge">この拡張機能について</span>
+    <p data-i18n="optAboutIntro">
+      X（旧Twitter）のメディア/いいね/ブックマーク/ホームを、画像がずらっと
+      並ぶグリッド表示に変えて、キーボードだけでサクサク見て回れるように
+      する拡張機能です。いいね・ブックマーク・フォローなども1キーで
+      行えます。以下、主な機能を重要な順に紹介します。
+    </p>
+
+    <h3 data-i18n="optFeat1H">1. グリッド表示</h3>
+    <ul>
+      <li data-i18n="optFeat1a">メディア欄・いいねの履歴・ブックマーク・ホーム（「画像のみ表示」
+        ON時）を、画像が並ぶグリッド（Pinterest風）に変換します。</li>
+      <li data-i18n="optFeat1b">W/A/S/D（または矢印キー）で選択を移動、Qで開く/閉じる、Spaceで
+        1画面分スクロールや画像の拡大ができます。</li>
+      <li data-i18n="optFeat1c">グリッドの列数はツールバーからお好みで変更できます。</li>
+    </ul>
+
+    <h3 data-i18n="optFeat2H">2. 画像のみ表示</h3>
+    <ul>
+      <li data-i18n="optFeat2a">ホーム／ブックマークでは、画像の無い投稿を除いてグリッド化するか
+        どうかをボタンでON/OFFできます。</li>
+      <li data-i18n="optFeat2b">ホームは「おすすめ」「フォロー中」等のタブごとに、ブックマークとは
+        別々に設定を覚えます。</li>
+    </ul>
+
+    <h3 data-i18n="optFeat3H">3. 複数画像の投稿</h3>
+    <ul>
+      <li data-i18n="optFeat3a">クリック（またはQ）すると、投稿内の画像が最初から全部大きく
+        並んで表示されます。Spaceで1枚をさらに大きく表示、A/Dで送れます。</li>
+    </ul>
+
+    <h3 data-i18n="optFeat4H">4. 未読のみ表示・動画のみ表示</h3>
+    <ul>
+      <li data-i18n="optFeat4a">グリッド内のボタンで、まだ見ていない投稿だけ・動画の投稿だけに
+        絞り込めます。</li>
+    </ul>
+
+    <h3 data-i18n="optFeat5H">5. メディア欄の「画像」「動画」切り替え</h3>
+    <ul>
+      <li data-i18n="optFeat5a">メディア欄を開くと画像がデフォルトで表示され、上部のボタンで
+        動画だけの表示にも切り替えられます。</li>
+    </ul>
+
+    <h3 data-i18n="optFeat6H">6. プロフィールカード</h3>
+    <ul>
+      <li data-i18n="optFeat6a">メディア欄の先頭に、アイコン・名前・自己紹介・フォロー数などを
+        まとめた小さなカードとフォローボタンを表示します。</li>
+    </ul>
+
+    <h3 data-i18n="optFeat7H">7. キーボードショートカット（リマップ可）</h3>
+    <ul>
+      <li data-i18n="optFeat7a">投稿を開く／その人のメディア欄を開く／いいね／ブックマーク／
+        ホーム更新／メニューを開く／ホームへ戻る、が1キーで行えます。</li>
+      <li data-i18n="optFeat7b">グリッドを使っていない通常のタイムラインでも、WASDQで投稿を
+        選んで同じ操作ができます。</li>
+    </ul>
+
+    <h3 data-i18n="optFeat8H">8. その他</h3>
+    <ul>
+      <li data-i18n="optFeat8a">右サイドバーの表示/非表示も切り替え可能です（左の設定を参照）。</li>
+    </ul>
+  </div>
+</div>
+
+  <script src="options.js"></script>
+</body>
+</html>

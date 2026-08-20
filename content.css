@@ -1,0 +1,1114 @@
+/* 色カスタマイズ用の変数（設定ページで変更可。未設定時は従来色）。
+   アクセント色はrgbトリプレット（29, 155, 240 形式）で持ち、
+   rgba(var(--xmr-accent-rgb), a) の形で透明度違いにも使い回す。 */
+:root {
+  --xmr-accent-rgb: 29, 155, 240;
+  --xmr-seen-band: #1c3a56;
+  --xmr-seen-band-empty: #20415f;
+}
+html.xmr-light {
+  --xmr-seen-band: #cfe5f6;
+  --xmr-seen-band-empty: #c2ddf2;
+}
+
+/* ===== X Media Grid Restore : static styles ===== */
+
+/* 左ナビ圧縮(.xmr-nav-shrink/.xmr-label-hide)は撤回した。ラベルspanを隠し、
+   <a>要素自体の幅も縮めても、<a>とheaderの間にある複数階層の無名ラッパーdiv
+   がそれぞれ古い幅を独立して保持しており、ナビ全体の幅が結局縮まなかった
+   （実機で確認）。特定セレクタに依存しない汎用的な縮小方法が見つからず、
+   Xの構造変更に弱い脆いコードになる割に「ラベル無し・幅だけ残る」という
+   中途半端な見た目が直らないため撤回し、Xの標準ナビ表示に戻した。
+   （content.jsのwidenMain()を参照） */
+
+/* v3〜v3.4で試した「primaryColumnの幅を広げる／中央寄せする」処理
+   (.xmr-declamp / .xmr-center-cluster / .xmr-wide-main) は、ページによって
+   内部のflex構造が違うらしく runaway拡大・逆に縮む・極端に狭くなるという
+   3種類の不具合を実機で繰り返し起こしたため撤回した。通常ページはXの
+   標準レイアウトのまま触らない（グリッド専用ページは独立したposition:fixed
+   オーバーレイなので対象外・影響なし）。 */
+
+/* --- グリッド表示中は右サイドバーを丸ごと隠す（hideSidebar設定がONの時）。
+   OFFの時はサイドバーには一切手を加えず、Xの標準表示のまま横に並べる
+   （shellの右端をcomputeShellRight()でサイドバーの左端に合わせる）。 --- */
+.xmr-sidebar-hide {
+  display: none !important;
+}
+/* --- グリッド表示中はXのネイティブなタブ切替(ブックマーク/いいね等)も隠す。
+   ツールバーの検索・いいね・ブックマークと役割が重複するため。 --- */
+.xmr-tablist-hide {
+  display: none !important;
+}
+
+/* 実機報告：検索ボックスが小さい、もう少し横に長くしてほしい。DOM上の
+   位置・親子関係は動かさず、見た目の幅だけCSSで広げる。サイドバー自体の
+   幅を超えてあふれないよう、固定pxではなく「親の幅いっぱいまで」＋
+   上限付きで広げる（幅がどれだけ余裕があるかは実機ごとに違うため）。 */
+.xmr-search-widen {
+  width: 100% !important;
+  max-width: min(440px, 100%) !important;
+}
+
+/* --- ホーム専用「画像のみ表示」トグルボタン（画面に固定し、スクロールで動かない） --- */
+.xmr-home-toggle {
+  position: fixed;
+  left: 12px;
+  /* 左下(12px)だと自分のアカウントアイコン・ハンドル名の行と重なっていた
+     （実機報告）。その行の上まで持ち上げて避ける。 */
+  bottom: 90px;
+  z-index: 2000;
+  background: rgb(var(--xmr-accent-rgb));
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ===== メディア／いいねグリッド（v3）=====
+   Xの本物のリストには一切スタイルを当てない。透明化だけする。
+   グリッド自体もprimaryColumnの幅計算には一切参加せず、position:fixedで
+   ナビ右端からビューポート右端までを独立して覆う（Xのレイアウトと干渉しないため
+   ズーム倍率や列数変更で崩れにくい。leftはJSでナビの実測幅から設定）。 */
+.xmr-source-hidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.xmr-shell {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  z-index: 40;
+}
+
+.xmr-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: rgba(239, 243, 244, 0.85);
+  /* ホームの自作リスト等でタブピルが増えても1行に収まらず溢れないよう、
+     2行以上に自然に折り返す。stickyはshell内の通常フローに参加するので、
+     折り返して高さが増えた分は下のグリッド本体が押し下がるだけで、
+     重なり・欠けは起きない（top:0のまま増えた高さごと貼り付く）。 */
+  flex-wrap: wrap;
+  /* sticky で下のタイルの上に乗るため、透過だと画像が透けて見える。必ず不透明にする */
+  background: rgb(0, 0, 0);
+  /* 実機報告：タイル側のz-index持ち要素（複数枚バッジ1/4、ホバー操作ボタン列）が
+     スクロール時にツールバーを貫通して上に見えていた。stickyのツールバーに
+     明示的なz-indexを与えて常に手前にする。 */
+  z-index: 10;
+  border-bottom: 1px solid rgba(239, 243, 244, 0.15);
+  position: sticky;
+  top: 0;
+}
+/* 役割ごとのボタングループ。「ボタンがフラットに並んで渋滞気味で雑多」と
+   いう報告を受けて、薄い背景の囲みでグループの切れ目が一目で分かるように
+   した。グループ内でもflex-wrapを効かせ、タブピルが多い時はグループの中で
+   折り返す（グループ自体が横に伸びきってツールバーを壊さない）。 */
+.xmr-tb-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  background: rgba(239, 243, 244, 0.06);
+  border-radius: 12px;
+  padding: 4px 8px;
+  min-width: 0;
+}
+/* タブが無いページ（いいね/ブックマーク等）ではタブグループは空のまま。
+   空の囲みだけ表示されると謎の四角になるので消す。 */
+.xmr-tb-group:empty {
+  display: none;
+}
+/* 設定系（列数/⚙設定）は右端寄せ。折り返し発生時も、この
+   グループが載っている行の中で右端に寄る。 */
+.xmr-tb-group-config {
+  margin-left: auto;
+}
+.xmr-toolbar input[type='number'] {
+  width: 48px;
+  background: rgba(239, 243, 244, 0.08);
+  border: 1px solid rgba(239, 243, 244, 0.2);
+  border-radius: 4px;
+  color: rgb(231, 233, 234);
+  padding: 2px 4px;
+}
+.xmr-toolbar a,
+.xmr-toolbar button.xmr-tb-refresh,
+.xmr-toolbar button.xmr-tb-settings,
+.xmr-toolbar button.xmr-tb-filter-unread,
+.xmr-toolbar button.xmr-tb-filter-video {
+  color: rgb(231, 233, 234);
+  text-decoration: none;
+  background: rgba(239, 243, 244, 0.08);
+  border: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  font-size: 13px;
+  cursor: pointer;
+}
+.xmr-toolbar a:hover,
+.xmr-toolbar button.xmr-tb-refresh:hover,
+.xmr-toolbar button.xmr-tb-settings:hover,
+.xmr-toolbar button.xmr-tb-filter-unread:hover,
+.xmr-toolbar button.xmr-tb-filter-video:hover {
+  background: rgba(239, 243, 244, 0.16);
+}
+.xmr-tb-refresh-status {
+  font-size: 12px;
+  color: rgba(239, 243, 244, 0.6);
+}
+/* 右端寄せは.xmr-tb-cols単体ではなく設定グループ(.xmr-tb-group-config)
+   全体で行うようになった（margin-left:autoはそちらへ移動）。 */
+.xmr-tb-cols {
+  white-space: nowrap;
+}
+/* hideSidebar設定がONの間だけ出る「検索」ボタン。押すと一時的に本物の
+   サイドバーを表示して検索ボックスへ自動フォーカスする（openSidebarPeek()
+   参照）。見た目も検索ボックスらしくしてほしいとの要望を受けて、
+   虫眼鏡アイコン付きの丸いボタンにした。 */
+/* 実機報告：ボタンが小さくてクリックしづらい。他のツールバーボタンより
+   一回り大きくして押しやすくする。 */
+.xmr-toolbar button.xmr-tb-search-peek {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 243, 244, 0.08);
+  border: 1px solid rgba(239, 243, 244, 0.25);
+  border-radius: 999px;
+  color: rgba(239, 243, 244, 0.85);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 8px 18px;
+  min-height: 32px;
+  cursor: pointer;
+}
+.xmr-toolbar button.xmr-tb-search-peek:hover {
+  background: rgba(239, 243, 244, 0.16);
+}
+.xmr-tb-search-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+/* プロフィールタブ（ポスト/返信/リポスト等）は共通ボタン（検索/いいね/
+   ブックマーク/更新）と見分けがつきにくいという指摘が繰り返し来ていた。
+   枠線だけの違いでは弱かったため、グループの囲み＋見出しラベル＋Xの
+   ブランド色を使った色付きピルで、一目で別グループだと分かるようにした
+   （以前の縦の区切り線.xmr-tb-sepは.xmr-tb-groupの囲みに役割を譲って廃止）。 */
+.xmr-tb-group-label {
+  font-size: 11px;
+  color: rgba(239, 243, 244, 0.5);
+  white-space: nowrap;
+}
+.xmr-toolbar a.xmr-tb-account-tab {
+  background: rgba(var(--xmr-accent-rgb), 0.15);
+  color: rgb(var(--xmr-accent-rgb));
+  border: 1px solid rgba(var(--xmr-accent-rgb), 0.4);
+  font-weight: 700;
+}
+.xmr-toolbar a.xmr-tb-account-tab:hover {
+  background: rgba(var(--xmr-accent-rgb), 0.28);
+}
+
+/* ホームのタブ切替ボタン（おすすめ／フォロー中／自分で作ったリスト）。
+   hrefを持たないボタンなので、共通の.xmr-toolbar a向けの基本スタイルとは
+   独立して定義する。 */
+.xmr-toolbar button.xmr-tb-home-tab {
+  color: rgb(var(--xmr-accent-rgb));
+  background: transparent;
+  border: 1px solid rgba(var(--xmr-accent-rgb), 0.4);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  font-size: 13px;
+  cursor: pointer;
+}
+.xmr-toolbar button.xmr-tb-home-tab:hover {
+  background: rgba(var(--xmr-accent-rgb), 0.15);
+}
+.xmr-toolbar button.xmr-tb-home-tab.xmr-tb-home-tab-active {
+  background: rgba(var(--xmr-accent-rgb), 0.25);
+  font-weight: 700;
+}
+
+/* プロフィールのメディア欄用の簡易カード（アバター＋表示名＋ハンドル名＋自己紹介）。
+   stickyにはしないので、グリッドと同じくスクロールすれば上へ流れて消える。
+   バナー画像は「巨大な空白の原因になった」経緯があるため復活させていない。 */
+.xmr-profile-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+}
+.xmr-profile-card img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.xmr-profile-card-text {
+  min-width: 0;
+}
+.xmr-profile-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgb(231, 233, 234);
+}
+.xmr-profile-card-text > span {
+  font-size: 13px;
+  color: rgba(239, 243, 244, 0.6);
+}
+.xmr-profile-card-bio {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(239, 243, 244, 0.8);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.xmr-profile-card-bio-link {
+  color: rgb(var(--xmr-accent-rgb));
+  text-decoration: none;
+}
+.xmr-profile-card-bio-link:hover {
+  text-decoration: underline;
+}
+.xmr-profile-card-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(239, 243, 244, 0.6);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.xmr-profile-card-meta a {
+  color: rgb(var(--xmr-accent-rgb));
+  text-decoration: none;
+}
+.xmr-profile-card-meta a:hover {
+  text-decoration: underline;
+}
+.xmr-profile-card-stats {
+  margin-top: 4px;
+  font-size: 12px;
+  display: flex;
+  gap: 12px;
+}
+.xmr-profile-card-stats a {
+  color: rgb(231, 233, 234);
+  text-decoration: none;
+  font-weight: 700;
+}
+.xmr-profile-card-stats a:hover {
+  text-decoration: underline;
+}
+.xmr-profile-card-followedby {
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(239, 243, 244, 0.5);
+}
+/* 自前のフォローボタン：本物のボタン(隠れたまま)へclick()を委譲するだけの
+   見た目用ボタン。押した時の状態(フォロー/フォロー中)は本物の値をコピーする。 */
+.xmr-profile-card-follow {
+  margin-left: auto;
+  align-self: center;
+  flex-shrink: 0;
+  background: rgb(239, 243, 244);
+  color: rgb(15, 20, 25);
+  border: none;
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.xmr-profile-card-follow:hover {
+  background: rgba(239, 243, 244, 0.85);
+}
+/* フォロー中の状態はXの本物のボタンと同じく黒背景・白文字・枠線にする */
+.xmr-profile-card-follow.xmr-profile-card-follow-active {
+  background: rgb(0, 0, 0);
+  color: rgb(239, 243, 244);
+  border: 1px solid rgba(239, 243, 244, 0.3);
+}
+.xmr-profile-card-follow.xmr-profile-card-follow-active:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.xmr-cgrid {
+  display: grid;
+  grid-template-columns: repeat(var(--xmr-cols, 5), minmax(0, 1fr));
+  gap: 4px;
+  padding: 2px;
+  min-width: 0;
+  width: 100%;
+}
+
+.xmr-loading {
+  text-align: center;
+  padding: 16px;
+  color: rgba(239, 243, 244, 0.6);
+  font-size: 13px;
+}
+
+/* app.htmlの「画像＋下の帯（投稿者・本文・アイコン）」構成に合わせる。
+   写真タイルは 画像エリア(3:4, app.htmlに合わせてクロップ量を減らした縦長比)
+   ＋ その下の帯、の2段構成。テキストのみのエントリ（画像なし）は
+   画像エリアを省き、帯の内容がタイル全体になる。 */
+.xmr-tile {
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: outline-color 60ms ease-out;
+}
+.xmr-tile.xmr-selected {
+  outline-color: rgb(var(--xmr-accent-rgb));
+}
+/* タイル全体の枠線だけだと画像自体には付いていないように見える、との
+   指摘があったため、選択中は画像そのものにも枠線を付ける。 */
+.xmr-tile.xmr-selected .xmr-tile-image img {
+  outline: 2px solid rgb(var(--xmr-accent-rgb));
+  outline-offset: -2px;
+}
+
+.xmr-tile-image {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.xmr-tile-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 帯：本文・投稿者があればそれを表示。無ければ空のグレーのまま（高さだけ確保） */
+.xmr-tile-band {
+  background: #16181c;
+  border: 1px solid rgba(239, 243, 244, 0.15);
+  border-top: none;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 30px;
+}
+.xmr-tile-image + .xmr-tile-band {
+  border-top: 1px solid rgba(239, 243, 244, 0.15);
+}
+.xmr-tile-band-empty {
+  background: #1c1e22;
+}
+.xmr-tile-text .xmr-tile-band {
+  border-top: 1px solid rgba(239, 243, 244, 0.15);
+  height: 100%;
+}
+.xmr-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+.xmr-tile-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(239, 243, 244, 0.15);
+}
+.xmr-tile-name {
+  font-size: 11px;
+  color: rgb(231, 233, 234);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.xmr-tile-text-body {
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgb(231, 233, 234);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+}
+
+/* 既読トラッキング：「下まで進んで前見たところに来た」ことが視覚的に
+   すぐ分かるようにするため。文字色は変えず（読みやすさ優先、との指摘）、
+   代わりに文字が乗っている帯の背景色をわずかに変える。 */
+.xmr-tile-seen .xmr-tile-band {
+  background: var(--xmr-seen-band); /* 既読色。設定でカスタム可（初期値はテーマ別） */
+}
+.xmr-tile-seen .xmr-tile-band-empty {
+  background: var(--xmr-seen-band-empty);
+}
+
+/* 「未読のみ表示」「動画のみ表示」トグル。display:noneで隙間なく詰める
+   （実機報告：opacity:0だと隙間だらけで詰めてほしいとの指摘）。過去に
+   CSS orderやDOM挿入位置でグリッドを詰めた際、配列インデックス(i % cols)と
+   見た目の列がズレてWASDが壊れた事故が繰り返しあったため、フィルタが
+   有効な間のWASD移動は配列インデックス計算を一切使わず、選択中タイルの
+   実際の描画位置から「右/左/上/下に一番近い表示中タイル」を探す
+   spatialNeighbor()（updateSelectionFromScroll()と同じ「実測位置で判断
+   する」方式）に切り替える。フィルタが無い時の従来の挙動には一切触れない。 */
+.xmr-cgrid.xmr-filter-unread .xmr-tile.xmr-tile-seen {
+  display: none;
+}
+.xmr-cgrid.xmr-filter-video .xmr-tile:not(.xmr-tile-isvideo) {
+  display: none;
+}
+
+/* 複数画像バッジ */
+
+.xmr-multi-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* 動画バッジ（サムネイル中央の再生アイコン。Xの本物のグリッドと同じ位置感）
+   実機報告「もうちょっとデカくても良い」を受けて40px→60px（アイコンも
+   14px→21px）に拡大。背景は半透明のままにして画像の視認性は保つ。 */
+.xmr-video-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 21px;
+  border-radius: 50%;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* --- 通常のタイムライン（グリッド未使用時）でのWASDQ選択の枠線 ---
+   outlineはボックスモデルに参加しない（レイアウトを一切動かさない）ため、
+   Xのネイティブな仮想リストのtransform位置計算に影響を与えず安全に付けられる。
+   グリッドのタイル選択(.xmr-tile.xmr-selected)と同じ色・太さで統一。 */
+.xmr-native-sel {
+  outline: 2px solid rgb(var(--xmr-accent-rgb));
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+.xmr-native-sel [data-testid="tweetPhoto"] img {
+  outline: 2px solid rgb(var(--xmr-accent-rgb));
+  outline-offset: -2px;
+}
+
+/* --- 「•••」メニューのW/S選択中の項目 --- ネイティブの:focus-visibleは
+   .focus()の呼び出し方によって出たり出なかったりして当てにならなかった
+   （実機報告）ため、他の選択枠と同じ自前のoutlineで確実に見せる。 */
+.xmr-menu-selected {
+  outline: 2px solid rgb(var(--xmr-accent-rgb)) !important;
+  outline-offset: -2px !important;
+  background: rgba(var(--xmr-accent-rgb), 0.1) !important;
+}
+
+/* 通常タイムラインでの既読トラッキング。画像を暗くすると絵を見る目的に
+   反する（実機報告：セル全体を暗くしたら画像まで見えにくくなった）ため、
+   絶対に画像には触れない。文字（投稿者名・本文）だけに色を付け、
+   「スクロールしていて前に見たところまで来た」と一目で分かる程度に留める。
+   colorはimg要素には効かないので、この2つのセレクタが画像に影響することはない。 */
+.xmr-native-seen [data-testid="User-Name"],
+.xmr-native-seen [data-testid="tweetText"] {
+  color: rgb(139, 180, 219);
+}
+
+/* グリッド準備中の簡易読み込み表示。以前は画面全体を覆う黒いオーバーレイ
+   だったが、Xの検索アイコン等ナビ全体まで隠してしまい「検索が消えた」
+   「固まった」という誤解を招いた（実機報告）。ナビや本来の画面操作を
+   一切邪魔しない、右下の小さいバッジだけにする。 */
+.xmr-early-loading {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  background: rgba(0, 0, 0, 0.85);
+  color: rgba(239, 243, 244, 0.85);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 2000;
+}
+
+/* いいね/ブックマークキーの実行結果トースト。グリッド一覧・拡大表示
+   （ビューア＝z-index:2147483000のオーバーレイ）・通常タイムラインの
+   どこで押しても必ず見えるように、それより上へ画面下中央に出す。
+   見た目は.xmr-early-loadingと同系の黒ピル。クリックの邪魔はしない。 */
+.xmr-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 48px;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: rgba(239, 243, 244, 0.95);
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(239, 243, 244, 0.25);
+  font-size: 13px;
+  pointer-events: none;
+  z-index: 2147483100;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.xmr-toast-show {
+  opacity: 1;
+}
+
+/* --- サブグリッド／ビューア オーバーレイ --- */
+.xmr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  background: rgba(0, 0, 0, 0.92);
+  display: none;
+  align-items: center;
+  /* 複数画像(4枚等)を並べた時、縦に画面をはみ出すことがあった。単純な
+     centerだと、はみ出した分を見るためのスクロールができず下側が見えない
+     まま切れていた（実機報告）。safe centerなら収まる時は中央寄せのまま、
+     はみ出す時は先頭(上)寄せに切り替わりスクロールで全部見られる。 */
+  justify-content: safe center;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.xmr-overlay.xmr-open {
+  display: flex;
+}
+.xmr-overlay-close {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.xmr-overlay-hint {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+}
+.xmr-subgrid {
+  display: grid;
+  grid-template-columns: repeat(var(--xmr-subcols, 2), minmax(0, 1fr));
+  gap: 6px;
+  width: min(90vw, 900px);
+  max-height: 85vh;
+}
+.xmr-subgrid img {
+  /* フルサイズで並べてほしいとの要望のため、以前の1:1クロップ(cover)は
+     画像の一部が切れてしまうのでやめ、全体が見えるcontainに変更した。 */
+  width: 100%;
+  max-height: 85vh;
+  object-fit: contain;
+  cursor: pointer;
+  outline: 3px solid transparent;
+  border-radius: 4px;
+}
+.xmr-subgrid img.xmr-selected {
+  outline-color: rgb(var(--xmr-accent-rgb));
+}
+.xmr-viewer-layout {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 94vw;
+  max-height: 90vh;
+}
+.xmr-viewer-imgcount {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  z-index: 5;
+  pointer-events: none;
+}
+.xmr-fullimg {
+  max-width: 70vw;
+  max-height: 90vh;
+  object-fit: contain;
+  flex-shrink: 1;
+  /* 実機報告：グリッド一覧から初めて拡大表示を開いた瞬間、画像がまだ
+     読み込まれていない一瞬だけ実寸0になり、隣のキャプションパネルが
+     画像の位置(左寄り)に一瞬表示されてから正しい位置(右)へ動くちらつきが
+     あった。renderFocusedLayout()のimg要素使い回しは「2枚目以降への
+     切り替え」では効くが、grid一覧からの「最初の1回」は新しく作り直す
+     ため対象外だった。min-widthに下限を設けて、画像読み込み前でも
+     ある程度の場所を確保しておくことでちらつきを抑える。 */
+  min-width: min(40vw, 320px);
+}
+.xmr-viewer-caption {
+  /* 幅700px前後の狭いウィンドウで画像と合わせてはみ出さないよう、
+     固定280pxではなくビューポート幅に応じて縮む上限付きにする */
+  width: min(280px, 35vw);
+  flex-shrink: 0;
+  background: #16181c;
+  border: 1px solid rgba(239, 243, 244, 0.15);
+  border-radius: 12px;
+  padding: 14px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.xmr-viewer-caption .xmr-tile-head {
+  margin-bottom: 8px;
+}
+.xmr-viewer-caption .xmr-tile-avatar {
+  width: 28px;
+  height: 28px;
+}
+.xmr-viewer-caption .xmr-tile-name {
+  font-size: 13px;
+  white-space: normal;
+}
+.xmr-viewer-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgb(231, 233, 234);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.xmr-viewer-open {
+  display: block;
+  margin-top: 14px;
+  text-align: center;
+  background: rgb(var(--xmr-accent-rgb));
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 999px;
+}
+.xmr-viewer-open:hover {
+  background: rgb(26, 140, 216);
+}
+.xmr-viewer-open-secondary {
+  margin-top: 8px;
+  background: transparent;
+  color: rgb(var(--xmr-accent-rgb));
+  border: 1px solid rgba(var(--xmr-accent-rgb), 0.4);
+}
+.xmr-viewer-open-secondary:hover {
+  background: rgba(var(--xmr-accent-rgb), 0.12);
+}
+
+/* リプライキーでXのリプライ入力モーダルを開いている間だけ付くクラス。
+   実機検証：#layers自体のz-indexを上げても、その親div(z-index:0)が
+   スタッキングコンテキストを作っているため外側ではシェル(z-index:40)を
+   超えられない。z-indexの綱引きはやめて、モーダル表示中はシェルを
+   visibility:hiddenで消す方式にする（display:noneと違いスクロール位置や
+   レイアウトが保持され、閉じれば選択位置ごとそのまま復帰する）。 */
+html.xmr-compose-open .xmr-shell {
+  visibility: hidden !important;
+}
+
+/* 拡大表示のキャプション内：いいね/ブックマーク/リプライの可視ボタン列 */
+.xmr-viewer-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.xmr-viewer-action-btn {
+  flex: 1;
+  background: rgba(239, 243, 244, 0.08);
+  border: 1px solid rgba(239, 243, 244, 0.2);
+  color: rgb(231, 233, 234);
+  border-radius: 999px;
+  padding: 8px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.xmr-viewer-action-btn:hover {
+  background: rgba(var(--xmr-accent-rgb), 0.18);
+  border-color: rgba(var(--xmr-accent-rgb), 0.5);
+}
+
+/* リプライモーダル表示中は拡大表示オーバーレイも隠す（実機報告：ビューアから
+   リプライを押すとモーダルがオーバーレイ(z-index:2147483000)の裏に開いて
+   見えず、ビューアを閉じて初めて現れていた。shellだけでなくこちらも隠す） */
+html.xmr-compose-open .xmr-overlay {
+  visibility: hidden !important;
+}
+
+/* プロフィールカードのヘッダー（バナー）画像。カードはflex行のままなので
+   flex-basis:100%で1行目を専有させ、下に従来のアバター行が並ぶ。
+   （.xmr-profile-card img の36px円形指定より詳細度を上げて打ち消す） */
+.xmr-profile-card {
+  flex-wrap: wrap;
+}
+.xmr-profile-card img.xmr-profile-card-banner {
+  flex-basis: 100%;
+  width: 100%;
+  height: auto;
+  max-height: 140px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* タイルのホバー操作ボタン列（設定tileActionsでON/OFF） */
+.xmr-tile-image {
+  position: relative;
+}
+.xmr-tile-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  /* フェードアウト（キー操作フィードバックのflash終了時）を目で追える長さに */
+  transition: opacity 400ms;
+  z-index: 2;
+}
+.xmr-tile:hover .xmr-tile-actions {
+  opacity: 1;
+  transition: opacity 120ms; /* ホバーで出る時はすぐ出す */
+}
+/* キー操作でいいね等を実行した直後、対象タイルのボタン列を一時表示する
+   （1.5秒後にクラスが外れ、上のtransitionでふわっと消える） */
+.xmr-tile.xmr-flash-actions .xmr-tile-actions {
+  opacity: 1;
+  transition: opacity 120ms;
+}
+html.xmr-tile-actions-off .xmr-tile-actions {
+  display: none !important;
+}
+.xmr-tile-act {
+  background: rgba(15, 20, 25, 0.75);
+  border: 1px solid rgba(239, 243, 244, 0.25);
+  color: rgb(231, 233, 234);
+  border-radius: 999px;
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.xmr-tile-act:hover {
+  background: rgba(var(--xmr-accent-rgb), 0.35);
+}
+
+/* いいね/ブックマーク済みの状態色（Xの本物のUIと同じ配色に合わせる） */
+.xmr-act-on-like {
+  color: rgb(249, 24, 128) !important;
+  border-color: rgba(249, 24, 128, 0.6) !important;
+}
+.xmr-act-on-bm {
+  color: rgb(var(--xmr-accent-rgb)) !important;
+  border-color: rgba(var(--xmr-accent-rgb), 0.6) !important;
+}
+
+/* ビューアのアイコン/名前クリックでアカウントページへ */
+.xmr-viewer-head-link {
+  cursor: pointer;
+}
+.xmr-viewer-head-link:hover .xmr-tile-name {
+  text-decoration: underline;
+}
+
+/* リポスト済みの状態色（Xの本物のUIと同じ緑） */
+.xmr-act-on-rt {
+  color: rgb(0, 186, 124) !important;
+  border-color: rgba(0, 186, 124, 0.6) !important;
+}
+
+/* 画像のみ表示トグルの「ツールバー内モード」。グリッド表示中はフローティング
+   ではなくフィルタ群（未読のみ/動画のみの隣）に収まる。フローティング用の
+   fixed座標・青塗りを打ち消して他のフィルタボタンと同じ見た目にする。 */
+.xmr-home-toggle.xmr-home-toggle-toolbar {
+  position: static;
+  left: auto;
+  bottom: auto;
+  z-index: auto;
+  background: rgba(239, 243, 244, 0.08);
+  color: rgb(231, 233, 234);
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 400;
+}
+.xmr-home-toggle.xmr-home-toggle-toolbar:hover {
+  background: rgba(239, 243, 244, 0.16);
+}
+
+/* ON状態のトグルボタン（未読のみ/動画のみ/画像のみ表示）。文字だけでなく
+   色でも状態が分かるように（ホームタブのアクティブ表示と同じ配色言語） */
+.xmr-toolbar button.xmr-tb-on {
+  background: rgba(var(--xmr-accent-rgb), 0.25);
+  color: rgb(var(--xmr-accent-rgb));
+  font-weight: 700;
+}
+.xmr-toolbar button.xmr-tb-on:hover {
+  background: rgba(var(--xmr-accent-rgb), 0.35);
+}
+
+/* ホバー操作ボタンの状態表示（実機フィードバックで方針確定）：
+   未実行=元のグレーのまま、実行済みだけ機能色で塗りつぶす（いいね=ピンク/
+   ブックマーク=青/リポスト=緑）。「押したら色が変わる」というXの本物の
+   ボタンと同じ直感に合わせる。 */
+.xmr-tile-act.xmr-act-on-like {
+  background: rgba(249, 24, 128, 0.85) !important;
+  color: #fff !important;
+}
+.xmr-tile-act.xmr-act-on-bm {
+  background: rgba(var(--xmr-accent-rgb), 0.85) !important;
+  color: #fff !important;
+}
+.xmr-tile-act.xmr-act-on-rt {
+  background: rgba(0, 186, 124, 0.85) !important;
+  color: #fff !important;
+}
+
+/* エンゲージメント数の表示（帯＝主要3種コンパクト、ビューア＝4種） */
+.xmr-tile-counts {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: rgba(239, 243, 244, 0.6);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.xmr-viewer-counts {
+  margin-top: 8px;
+  font-size: 13px;
+  color: rgba(239, 243, 244, 0.7);
+}
+
+/* ============================================================
+   白（ライト）テーマ対応。Xの表示テーマをbodyの背景輝度で判定し、
+   html.xmr-light が付いている間だけ以下の上書きが効く（実機フィード
+   バック：白テーマだと黒前提の配色で崩壊していた）。画像の上に重なる
+   半透明黒の要素（複数枚バッジ・再生アイコン・ホバー操作ボタン・
+   トースト・拡大表示の黒背景）はどちらのテーマでも成立するため
+   そのまま。 ============================================================ */
+html.xmr-light .xmr-toolbar {
+  background: rgb(255, 255, 255);
+  color: rgba(15, 20, 25, 0.85);
+  border-bottom: 1px solid rgba(15, 20, 25, 0.12);
+}
+html.xmr-light .xmr-tb-group {
+  background: rgba(15, 20, 25, 0.05);
+}
+html.xmr-light .xmr-tb-group-label {
+  color: rgba(15, 20, 25, 0.5);
+}
+html.xmr-light .xmr-toolbar a,
+html.xmr-light .xmr-toolbar button.xmr-tb-refresh,
+html.xmr-light .xmr-toolbar button.xmr-tb-settings,
+html.xmr-light .xmr-toolbar button.xmr-tb-filter-unread,
+html.xmr-light .xmr-toolbar button.xmr-tb-filter-video,
+html.xmr-light .xmr-home-toggle.xmr-home-toggle-toolbar {
+  background: rgba(15, 20, 25, 0.06);
+  color: rgb(15, 20, 25);
+}
+html.xmr-light .xmr-toolbar a:hover,
+html.xmr-light .xmr-toolbar button.xmr-tb-refresh:hover,
+html.xmr-light .xmr-toolbar button.xmr-tb-settings:hover,
+html.xmr-light .xmr-toolbar button.xmr-tb-filter-unread:hover,
+html.xmr-light .xmr-toolbar button.xmr-tb-filter-video:hover,
+html.xmr-light .xmr-home-toggle.xmr-home-toggle-toolbar:hover {
+  background: rgba(15, 20, 25, 0.14);
+}
+html.xmr-light .xmr-toolbar button.xmr-tb-on {
+  background: rgba(var(--xmr-accent-rgb), 0.18);
+  color: rgb(29, 120, 200);
+}
+html.xmr-light .xmr-tb-refresh-status {
+  color: rgba(15, 20, 25, 0.6);
+}
+html.xmr-light .xmr-toolbar button.xmr-tb-search-peek {
+  background: rgba(15, 20, 25, 0.06);
+  border-color: rgba(15, 20, 25, 0.25);
+  color: rgba(15, 20, 25, 0.8);
+}
+html.xmr-light .xmr-cols-input {
+  background: rgba(15, 20, 25, 0.06);
+  border: 1px solid rgba(15, 20, 25, 0.25);
+  color: rgb(15, 20, 25);
+}
+html.xmr-light .xmr-tile-band {
+  background: #f7f9f9;
+  border-color: rgba(15, 20, 25, 0.15);
+}
+html.xmr-light .xmr-tile-name,
+html.xmr-light .xmr-tile-text-body {
+  color: rgb(15, 20, 25);
+}
+html.xmr-light .xmr-tile-counts {
+  color: rgba(15, 20, 25, 0.55);
+}
+/* 既読色のライトテーマ既定値は冒頭の html.xmr-light 変数ブロックで定義
+   （カスタム色はJSがhtmlのインラインstyleに入れるため両テーマに勝つ） */
+html.xmr-light .xmr-loading {
+  color: rgba(15, 20, 25, 0.6);
+}
+html.xmr-light .xmr-viewer-caption {
+  background: rgb(255, 255, 255);
+  border-color: rgba(15, 20, 25, 0.18);
+}
+html.xmr-light .xmr-viewer-text,
+html.xmr-light .xmr-viewer-caption .xmr-tile-name {
+  color: rgb(15, 20, 25);
+}
+html.xmr-light .xmr-viewer-counts {
+  color: rgba(15, 20, 25, 0.65);
+}
+html.xmr-light .xmr-viewer-action-btn {
+  background: rgba(15, 20, 25, 0.06);
+  border-color: rgba(15, 20, 25, 0.25);
+  color: rgb(15, 20, 25);
+}
+html.xmr-light .xmr-viewer-action-btn:hover {
+  background: rgba(var(--xmr-accent-rgb), 0.15);
+}
+html.xmr-light .xmr-profile-card {
+  color: rgb(15, 20, 25);
+}
+html.xmr-light .xmr-profile-card * {
+  color: inherit;
+}
+html.xmr-light .xmr-profile-card a {
+  color: rgb(29, 120, 200);
+}
+html.xmr-light .xmr-profile-card-follow {
+  background: rgb(15, 20, 25);
+  color: #fff;
+}
+html.xmr-light .xmr-profile-card-follow-active {
+  background: #fff;
+  color: rgb(15, 20, 25);
+  border: 1px solid rgba(15, 20, 25, 0.35);
+}
+
+/* ============================================================
+   X本来の見た目に寄せた下線タブバー（v3.56.0。ホームのおすすめ/フォロー中/
+   リスト、アカウントのポスト/返信/リポスト/画像/動画）。ツールバーの
+   すぐ下にsticky（topはJSがツールバーの実測高さを入れる）。
+   ============================================================ */
+.xmr-tabbar {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid rgba(239, 243, 244, 0.15);
+  background: rgb(0, 0, 0);
+  position: sticky;
+  top: 44px; /* JSで実測値に上書きされる */
+  z-index: 9;
+  overflow-x: auto;
+}
+.xmr-xtab {
+  background: transparent;
+  border: none;
+  color: rgba(239, 243, 244, 0.55);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0 8px;
+  min-width: 56px;
+  flex: 0 1 auto;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+.xmr-xtab:hover {
+  background: rgba(239, 243, 244, 0.08);
+}
+.xmr-xtab-label {
+  position: relative;
+  padding: 12px 8px;
+}
+.xmr-xtab-active {
+  color: rgb(231, 233, 234);
+  font-weight: 700;
+}
+.xmr-xtab-active .xmr-xtab-label::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: rgb(var(--xmr-accent-rgb));
+}
+html.xmr-light .xmr-tabbar {
+  background: rgb(255, 255, 255);
+  border-bottom-color: rgba(15, 20, 25, 0.12);
+}
+html.xmr-light .xmr-xtab {
+  color: rgba(15, 20, 25, 0.55);
+}
+html.xmr-light .xmr-xtab:hover {
+  background: rgba(15, 20, 25, 0.07);
+}
+html.xmr-light .xmr-xtab-active {
+  color: rgb(15, 20, 25);
+}
+
+/* キャッシュ復元の間、素のページが一瞬見えるのを隠す幕（背景色はJSが
+   その時のbody背景をコピーする。z-indexはシェル(40)の下・素のページの上） */
+.xmr-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+}
+/* 動画タイルの再生アイコンはクリックでそのポストを開く（実機フィード
+   バック：再生ボタンを押したら再生されるのが自然） */
+.xmr-video-badge {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* リプライ入力モーダル表示中は、下に透けるprimaryColumn（素のメディア
+   一覧等。再マウントのためスクロール中のことがある）ごと隠す（実機報告：
+   背景に通常のメディア欄がスクロールされた状態で見えていた）。モーダル
+   本体は#layers側なので影響しない。 */
+html.xmr-compose-open [data-testid="primaryColumn"] {
+  visibility: hidden !important;
+}
