@@ -2397,10 +2397,28 @@
     if (e.key === ' ') stopSpaceHoldScroll();
   });
 
+  // いいね/ブックマーク/リポスト/リプライ/興味がない は、押しっぱなしにした時の
+  // OSキーリピートで連発してはいけない。誤爆で大量にいいねが付くのはもちろん、
+  // X側から見ても「自動でいいねを連打している」ようにしか見えず、
+  // 「表示専用・操作はユーザーが押した時だけ」という本拡張の前提が崩れる。
+  // 移動キー(WASD)とSpaceは連続入力が自然なのでリピートを許可する。
+  function isRepeatUnsafeKey(k) {
+    const s = Settings.keys;
+    return (
+      k === s.like || k === s.bookmark || k === s.reply || k === s.retweet ||
+      k === s.notInterested || k === s.refresh || k === s.openTweet ||
+      k === s.openMedia || k === s.profileToMedia || k === s.goHome
+    );
+  }
+
   document.addEventListener('keydown', (e) => {
     if (!Grid.active) return;
     if (isTypingTarget(e.target)) return;
     const k = e.key.toLowerCase();
+    if (e.repeat && isRepeatUnsafeKey(k)) {
+      e.preventDefault();
+      return;
+    }
     // グリッド一覧の状態ではQは「開く」のまま（1枚ならビューア、複数ならサブグリッドへ）。
     // サブグリッド／ビューアの状態からはQは常に「閉じる／1階層戻る」。
     // サブグリッドで特定の1枚を選んで開く操作だけSpaceに分離した
@@ -2604,6 +2622,11 @@
     if (isTypingTarget(e.target)) return;
     const overlayOpen = Grid.overlay && Grid.overlay.classList.contains('xmr-open');
     const k = e.key.toLowerCase();
+    // グリッド外（Xの通常表示）でも同じ理由でリピートを弾く（上のコメント参照）
+    if (e.repeat && isRepeatUnsafeKey(k)) {
+      e.preventDefault();
+      return;
+    }
 
     // いいね/ブックマークは、画像を開いていてもW/Sで選択しているだけでも
     // どちらでも使えるようにする（開かないと押せないのは不便なため）。
