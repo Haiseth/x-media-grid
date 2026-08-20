@@ -96,7 +96,7 @@
       "toolbarSearch": "検索",
       "pillPhotos": "画像",
       "pillVideos": "動画",
-      "optTitle": "X Media Grid Restore - 設定",
+      "optTitle": "Xメディアグリッド - 設定",
       "optSub": "表示設定とキー操作の一覧",
       "optDisplayHeading": "表示設定",
       "optHideSidebarLabel": "グリッド表示中は右サイドバーを隠す",
@@ -162,7 +162,14 @@
       "optSeenColorLabel": "既読の色",
       "optSeenColorDesc": "一度見た投稿は、タイル下の帯がこの色になります（どこまで読んだかの目印。既読の記録は更新やページ移動のタイミングで付きます）。初期値はテーマに合わせた青系。",
       "optColorReset": "初期値に戻す",
-      "extName": "Xメディアグリッド"
+      "extName": "Xメディアグリッド",
+      "bannerNewPosts": "新しいポストを表示",
+      "optNewPostsBannerLabel": "グリッド上に「新しいポストを表示」を出す",
+      "optNewPostsBannerDesc": "初期値：オン。ホームのグリッド表示中、新着が届いたら上部にバナーが出て、クリックで取り込みます。",
+      "optHideHomeDotLabel": "ホームの青い未読ドットを隠す",
+      "optHideHomeDotDesc": "初期値：オフ（表示する）。左ナビのホームアイコンに付く小さな青丸を隠します。",
+      "optHideNotifBadgeLabel": "通知の数字バッジを隠す",
+      "optHideNotifBadgeDesc": "初期値：オフ（表示する）。ブラウザ通知等で確認済みの人向けに、左ナビの通知アイコンの数字バッジを隠します。"
     },
     "en": {
       "extDescription": "Turn X's media tab, home & likes into an image grid. Like, bookmark & repost without opening posts. Display-only, no automation.",
@@ -215,7 +222,7 @@
       "toolbarSearch": "Search",
       "pillPhotos": "Photos",
       "pillVideos": "Videos",
-      "optTitle": "X Media Grid Restore - Settings",
+      "optTitle": "X Media Grid - Settings",
       "optSub": "Display settings and keyboard shortcuts",
       "optDisplayHeading": "Display settings",
       "optHideSidebarLabel": "Hide the right sidebar while the grid is shown",
@@ -281,7 +288,14 @@
       "optSeenColorLabel": "Seen color",
       "optSeenColorDesc": "Posts you've already seen get this color on the strip under the tile (a marker of how far you've read; recorded when you refresh or navigate away). Default is a theme-matched blue.",
       "optColorReset": "Reset",
-      "extName": "X Media Grid"
+      "extName": "X Media Grid",
+      "bannerNewPosts": "Show new posts",
+      "optNewPostsBannerLabel": "Show the \"new posts\" banner on the grid",
+      "optNewPostsBannerDesc": "Default: on. While the home grid is active, a banner appears when new posts arrive; click to load them.",
+      "optHideHomeDotLabel": "Hide the blue unread dot on Home",
+      "optHideHomeDotDesc": "Default: off (shown). Hides the small blue dot on the Home icon in the left nav.",
+      "optHideNotifBadgeLabel": "Hide the notification count badge",
+      "optHideNotifBadgeDesc": "Default: off (shown). For people who already get browser notifications: hides the number badge on the Notifications icon."
     }
   };
   function xmrUiLang() {
@@ -362,6 +376,9 @@
     fTarget: 'profile',
     accentColor: '', // ''=既定（Xブランド青）。#rrggbbでアクセント色を一括変更
     seenColor: '', // ''=既定（テーマ別の青系）。#rrggbbで既読の帯色を変更
+    newPostsBanner: true, // グリッド上の「新しいポストを表示」バナー
+    hideHomeDot: false, // ホームアイコンの青い未読ドットを隠す
+    hideNotifBadge: false, // 通知アイコンの数字バッジを隠す
     keys: Object.assign({}, DEFAULT_KEYS),
   };
 
@@ -387,6 +404,14 @@
       rootStyle.removeProperty('--xmr-seen-band-empty');
     }
   }
+  // ナビのバッジ類の表示設定をhtmlクラスへ反映（CSS側で隠す。バッジ要素は
+  // 実機DOM観測で確定：ナビリンク内のsvgの後ろにあるdivがバッジ本体）
+  function applyNavBadgePrefs() {
+    if (!document.documentElement) return;
+    document.documentElement.classList.toggle('xmr-hide-home-dot', Settings.hideHomeDot);
+    document.documentElement.classList.toggle('xmr-hide-notif-badge', Settings.hideNotifBadge);
+  }
+
   function applyTileActionsVisibility() {
     // display:noneの出し分けはCSS任せにして、ここではルート要素のクラスを
     // 切り替えるだけ（既存タイル・今後作るタイルの両方へ即時反映される）。
@@ -398,6 +423,10 @@
     if (!saved) return;
     if (typeof saved.hideSidebar === 'boolean') Settings.hideSidebar = saved.hideSidebar;
     if (typeof saved.tileActions === 'boolean') Settings.tileActions = saved.tileActions;
+    if (typeof saved.newPostsBanner === 'boolean') Settings.newPostsBanner = saved.newPostsBanner;
+    if (typeof saved.hideHomeDot === 'boolean') Settings.hideHomeDot = saved.hideHomeDot;
+    if (typeof saved.hideNotifBadge === 'boolean') Settings.hideNotifBadge = saved.hideNotifBadge;
+    applyNavBadgePrefs();
     if (saved.fTarget === 'media' || saved.fTarget === 'profile') Settings.fTarget = saved.fTarget;
     if (typeof saved.accentColor === 'string') Settings.accentColor = saved.accentColor;
     if (typeof saved.seenColor === 'string') Settings.seenColor = saved.seenColor;
@@ -793,6 +822,8 @@
     activatingMode: null, // activateGrid()が完了(Grid.active=true)するまでの間、要求中のmodeを保持（同じ目的の重複呼び出しを弾くため）
     activatingHref: null,
     homeScope: null, // ホームのどのタブでこのグリッドを作ったか（タブ切替の検知とキャッシュキーに使う）
+    newPostsTimer: null, // 新着ピル(pillLabel)の監視タイマー（ホームのみ）
+    newPostsBtn: null, // グリッド上の「新しいポストを表示」バナー要素
     veilEl: null, // キャッシュ復元の間、素のページが一瞬見えるのを隠す幕
   };
 
@@ -3137,6 +3168,9 @@
     Grid.sourceObserver = null;
     if (Grid.pendingTimer) clearInterval(Grid.pendingTimer);
     Grid.pendingTimer = null;
+    if (Grid.newPostsTimer) clearInterval(Grid.newPostsTimer);
+    Grid.newPostsTimer = null;
+    Grid.newPostsBtn = null;
     if (Grid.sourceRoot) Grid.sourceRoot.classList.remove('xmr-source-hidden');
     Grid.sourceRoot = null;
     document.querySelector('[data-testid="sidebarColumn"]')?.classList.remove('xmr-sidebar-hide');
@@ -3226,6 +3260,27 @@
     });
   }
 
+  // 新着ピル（「◯◯さんがポストしました」）の検出。実機のMutationObserver
+  // 観測で確定した安定シグネチャ：DIV[data-testid="pillLabel"]がピルの
+  // ラベルで、クリック対象はその祖先の<button>（言語・文言・数字の有無に
+  // 一切依存しない）。以前の「文言や見た目のヒューリスティック」は
+  // 引用ツイートのヘッダー等を誤検出するリスクがあり全廃した。
+  function findNewPostsPillButton(primary) {
+    // 【実機で確定した罠】Xは非表示中のタブ（フォロー中等）のタイムラインも
+    // DOMに保持しており、そちらにもpillLabelが存在し得る（display:noneで
+    // 矩形サイズ0）。先頭を無条件に拾うと非表示側のピルをクリックして
+    // 「何も起きない」ことになるため、実際にレイアウトされている
+    // （矩形サイズ>0の）ピルだけを対象にする。
+    const labels = (primary || document).querySelectorAll('[data-testid="pillLabel"]');
+    for (const label of labels) {
+      const btn = label.closest('button, [role="button"]');
+      if (!btn) continue;
+      const r = btn.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) return btn;
+    }
+    return null;
+  }
+
   async function refreshHomeTimeline() {
     if (Grid.refreshing) return;
     Grid.refreshing = true;
@@ -3247,21 +3302,7 @@
     // フォールバックとして残す。※構造判定は英語UI実機では未検証。
     const banner =
       primary &&
-      [...primary.querySelectorAll('[role="button"], a, div[tabindex]')].find((el) => {
-        if (el.children.length >= 6 || el.textContent.length > 40) return false;
-        const t = el.textContent;
-        // 新フォーマット（実機スクショで確認）：「(アバター数枚)さんがポスト
-        // しました」— 数字を含まないため、旧来の数字必須条件では取れない。
-        // 「投稿者アバターのサムネイルを含む・浮いている(position:static
-        // ではない)・短い文言のピル」を新着バナーとみなす。
-        if (el.querySelector('img[src*="profile_images"]')) {
-          const cs = getComputedStyle(el);
-          if (cs.position !== 'static') return true;
-        }
-        // 旧フォーマット（数字あり）へのフォールバックも残す
-        if (/\d/.test(t) && el.querySelector('img[src*="profile_images"]')) return true;
-        return /件.*(ポスト|投稿)/.test(t) && t.length < 30;
-      });
+      findNewPostsPillButton(primary);
     if (banner) {
       banner.click();
     } else {
@@ -4193,8 +4234,49 @@
     document.body.appendChild(shell);
     const syncTabbarTop = () => {
       if (tabbarEl) tabbarEl.style.top = toolbar.offsetHeight + 'px';
+      if (Grid.newPostsBtn) {
+        const sr = shell.getBoundingClientRect();
+        // タブバーに重ねる高さ（実機フィードバック：画像に被らないようもう少し上へ）
+        Grid.newPostsBtn.style.top = sr.top + toolbar.offsetHeight + 4 + 'px';
+        Grid.newPostsBtn.style.left = sr.left + sr.width / 2 + 'px';
+      }
     };
     syncTabbarTop();
+
+    // ホーム限定：Xの新着ピル（「◯◯さんがポストしました」）が裏に出たら、
+    // グリッド上にも同等のバナーを出す（実機フィードバック：ONの時も新着が
+    // 届いた表示が欲しい＋クリックでその分を読み込みたい）。検出は
+    // pillLabel(実機観測で確定したtestid)ベースで言語非依存。クリックで
+    // 本物のピルをclickし、更新処理(refreshHomeTimeline)で取り込む。
+    if (mode === 'home') {
+      const npBtn = document.createElement('button');
+      npBtn.type = 'button';
+      npBtn.className = 'xmr-newposts';
+      npBtn.textContent = '↑ ' + t('bannerNewPosts');
+      npBtn.style.display = 'none';
+      npBtn.addEventListener('click', () => {
+        npBtn.style.display = 'none';
+        refreshHomeTimeline();
+      });
+      shell.appendChild(npBtn);
+      Grid.newPostsBtn = npBtn;
+      Grid.newPostsTimer = setInterval(() => {
+        if (!Grid.active || Grid.mode !== 'home') return;
+        const pill = findNewPostsPillButton(document.querySelector('[data-testid="primaryColumn"]'));
+        // 実機フィードバック：戻ってきた直後はキャッシュ復元のため、Xが
+        // ピルを出さずに新着を抱えているケース（ホームアイコンに青ドット
+        // だけ付く）がある。ドットのDOM上の存在（ナビリンク内のsvgの後ろの
+        // div。実機観測で確定した構造）もトリガーに含める。設定でドットを
+        // 非表示にしていてもdisplay:noneなだけで要素は存在するので検知できる。
+        const homeLink = document.querySelector('[data-testid="AppTabBar_Home_Link"]');
+        const homeDot = homeLink && homeLink.querySelector('svg ~ div');
+        const show = (!!pill || !!homeDot) && !Grid.refreshing && Settings.newPostsBanner;
+        if ((npBtn.style.display === 'none') === show) {
+          npBtn.style.display = show ? 'block' : 'none';
+          if (show) syncTabbarTop();
+        }
+      }, 4000);
+    }
 
     Grid.shellResizeHandler = () => {
       const navR = navElForRect ? Math.ceil(navElForRect.getBoundingClientRect().right) : 0;

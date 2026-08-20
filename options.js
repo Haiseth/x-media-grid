@@ -119,11 +119,20 @@ function saveSettings(partial) {
 const hideSidebarEl = document.getElementById('hideSidebar');
 const tileActionsEl = document.getElementById('tileActions');
 const fTargetEl = document.getElementById('fTarget');
+const newPostsBannerEl = document.getElementById('newPostsBanner');
+const hideHomeDotEl = document.getElementById('hideHomeDot');
+const hideNotifBadgeEl = document.getElementById('hideNotifBadge');
 loadSettings((s) => {
   hideSidebarEl.checked = s.hideSidebar === true; // デフォルトOFF（サイドバーは隠さない）
   tileActionsEl.checked = s.tileActions !== false; // デフォルトON（ホバーで操作ボタンを出す）
   fTargetEl.value = s.fTarget === 'media' ? 'media' : 'profile'; // デフォルトはプロフィール
+  newPostsBannerEl.checked = s.newPostsBanner !== false; // デフォルトON
+  hideHomeDotEl.checked = s.hideHomeDot === true; // デフォルトOFF（表示）
+  hideNotifBadgeEl.checked = s.hideNotifBadge === true; // デフォルトOFF（表示）
 });
+newPostsBannerEl.addEventListener('change', () => saveSettings({ newPostsBanner: newPostsBannerEl.checked }));
+hideHomeDotEl.addEventListener('change', () => saveSettings({ hideHomeDot: hideHomeDotEl.checked }));
+hideNotifBadgeEl.addEventListener('change', () => saveSettings({ hideNotifBadge: hideNotifBadgeEl.checked }));
 fTargetEl.addEventListener('change', () => {
   saveSettings({ fTarget: fTargetEl.value === 'media' ? 'media' : 'profile' });
 });

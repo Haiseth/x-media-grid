@@ -1112,3 +1112,32 @@ html.xmr-light .xmr-xtab-active {
 html.xmr-compose-open [data-testid="primaryColumn"] {
   visibility: hidden !important;
 }
+
+/* グリッド上の新着バナー（Xの「◯◯さんがポストしました」ピルの代替。
+   裏でピルを検出したら表示し、クリックで本物のピル経由の更新を実行） */
+.xmr-newposts {
+  position: fixed; /* shell内absoluteだとスクロールで流れるためfixed（座標はJSが計算） */
+  transform: translateX(-50%);
+  z-index: 12;
+  background: rgb(var(--xmr-accent-rgb));
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+.xmr-newposts:hover {
+  filter: brightness(1.1);
+}
+
+/* ナビのバッジ非表示設定（実機DOM観測：バッジ本体はナビリンク内の
+   svgの後ろのdiv。ホーム=7pxの青丸、通知=数字バッジ。言語非依存） */
+html.xmr-hide-home-dot [data-testid="AppTabBar_Home_Link"] svg ~ div {
+  display: none !important;
+}
+html.xmr-hide-notif-badge [data-testid="AppTabBar_Notifications_Link"] svg ~ div {
+  display: none !important;
+}

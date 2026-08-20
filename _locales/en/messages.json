@@ -431,5 +431,26 @@
   },
   "extName": {
     "message": "X Media Grid"
+  },
+  "bannerNewPosts": {
+    "message": "Show new posts"
+  },
+  "optNewPostsBannerLabel": {
+    "message": "Show the \"new posts\" banner on the grid"
+  },
+  "optNewPostsBannerDesc": {
+    "message": "Default: on. While the home grid is active, a banner appears when new posts arrive; click to load them."
+  },
+  "optHideHomeDotLabel": {
+    "message": "Hide the blue unread dot on Home"
+  },
+  "optHideHomeDotDesc": {
+    "message": "Default: off (shown). Hides the small blue dot on the Home icon in the left nav."
+  },
+  "optHideNotifBadgeLabel": {
+    "message": "Hide the notification count badge"
+  },
+  "optHideNotifBadgeDesc": {
+    "message": "Default: off (shown). For people who already get browser notifications: hides the number badge on the Notifications icon."
   }
 }

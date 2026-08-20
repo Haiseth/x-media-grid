@@ -431,5 +431,26 @@
   },
   "extName": {
     "message": "Xメディアグリッド"
+  },
+  "bannerNewPosts": {
+    "message": "新しいポストを表示"
+  },
+  "optNewPostsBannerLabel": {
+    "message": "グリッド上に「新しいポストを表示」を出す"
+  },
+  "optNewPostsBannerDesc": {
+    "message": "初期値：オン。ホームのグリッド表示中、新着が届いたら上部にバナーが出て、クリックで取り込みます。"
+  },
+  "optHideHomeDotLabel": {
+    "message": "ホームの青い未読ドットを隠す"
+  },
+  "optHideHomeDotDesc": {
+    "message": "初期値：オフ（表示する）。左ナビのホームアイコンに付く小さな青丸を隠します。"
+  },
+  "optHideNotifBadgeLabel": {
+    "message": "通知の数字バッジを隠す"
+  },
+  "optHideNotifBadgeDesc": {
+    "message": "初期値：オフ（表示する）。ブラウザ通知等で確認済みの人向けに、左ナビの通知アイコンの数字バッジを隠します。"
   }
 }
