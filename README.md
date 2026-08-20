@@ -22,7 +22,8 @@ and like, bookmark, repost or reply **without opening a single post**. Built for
 
 - **表示専用** — 自動いいね・自動フォロー・自動投稿・スクレイピングは一切ありません。操作が実行されるのは、あなたがキーやボタンを押したその時だけです
 - **外部送信ゼロ** — 設定も既読履歴もすべてブラウザ内(localStorage / chrome.storage)。アナリティクスもトラッキングもありません
-- **最小権限** — `tabs`（閉じたタブから元のタブへフォーカスを戻すため）と `storage`（設定保存）のみ。ホスト権限は x.com / twitter.com のみ
+- **最小権限** — 要求する権限は `storage`（設定保存）**ただ1つ**。閲覧履歴もタブ一覧も読みません。動作するのは x.com / twitter.com のページ内だけです
+- **Minimal permissions** — `storage` and nothing else. No history, no tab access; it runs only inside x.com / twitter.com
 
 詳細は [PRIVACY.md](PRIVACY.md) / See [PRIVACY.md](PRIVACY.md) for the full privacy policy.
 

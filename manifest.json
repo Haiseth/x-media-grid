@@ -1,11 +1,10 @@
-﻿{
+{
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "version": "3.73.0",
+  "version": "3.74.0",
   "description": "__MSG_extDescription__",
   "default_locale": "ja",
   "permissions": [
-    "tabs",
     "storage"
   ],
   "background": {
@@ -15,8 +14,8 @@
   "content_scripts": [
     {
       "matches": [
-        "*://x.com/*",
-        "*://twitter.com/*"
+        "https://x.com/*",
+        "https://twitter.com/*"
       ],
       "js": [
         "content.js"

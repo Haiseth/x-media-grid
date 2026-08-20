@@ -18,8 +18,10 @@
 これらは拡張機能を削除すれば消えます。
 
 ### 権限について
-- `tabs`: 本拡張機能から開いたタブを閉じた時に、元のタブへフォーカスを戻すためだけに使用します
-- `storage`: 上記の設定を保存するために使用します
+- `storage`: 上記の設定を保存するためだけに使用します
+
+要求する権限はこの1つだけです。閲覧履歴・タブ一覧・他サイトへのアクセス権限は
+一切要求しません。動作するのは x.com / twitter.com のページ内だけです。
 
 ### 自動操作について
 本拡張機能は表示専用です。いいね・ブックマーク・リポスト・リプライ等の操作は、あなたがキーまたはボタンを押した時にのみ実行されます。自動での投稿・フォロー・いいね等は一切行いません。
@@ -46,8 +48,10 @@ The following is stored locally in your browser only, and never transmitted:
 Removing the extension deletes this data.
 
 ### Permissions
-- `tabs`: used only to return focus to your original tab when you close a tab opened by the extension
-- `storage`: used to save the settings above
+- `storage`: used only to save the settings above
+
+That is the only permission requested. No access to your browsing history, your
+tabs, or any other site. It runs only inside x.com / twitter.com pages.
 
 ### Automation
 The extension is display-only. Likes, bookmarks, reposts and replies run only when you press a key or button. It never posts, follows, or likes anything automatically.

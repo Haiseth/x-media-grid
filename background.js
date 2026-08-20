@@ -1,54 +1,32 @@
-// ===== X Media Grid Restore : background service worker =====
-// R/Fキー等でX上から開いた新しいタブを閉じたとき、ブラウザの既定動作
-// （隣接タブ、多くの場合「右側」）ではなく、必ず元のタブ（開いた側）へ
-// フォーカスを戻す。これはタブの開閉・フォーカス制御そのものであり、
-// content script（ページ内のJS）からは行えない領域なので、
-// chrome.tabsを使えるbackground（拡張機能側）で行う。
+// ===== X Media Grid : background service worker =====
 //
-// 表示専用というこの拡張機能の方針に沿って、対象はx.com/twitter.comを
-// 開いていたタブから開かれたタブだけに限定する（ブラウザ全体のタブ挙動を
-// 変えるものではない）。
-
-const openerMap = new Map(); // 子タブID -> 開いた側のタブID
-
-chrome.tabs.onCreated.addListener((tab) => {
-  if (tab.openerTabId == null) return;
-  chrome.tabs.get(tab.openerTabId, (opener) => {
-    if (chrome.runtime.lastError || !opener || !opener.url) return;
-    if (/^https:\/\/(x\.com|twitter\.com)\//.test(opener.url)) {
-      openerMap.set(tab.id, tab.openerTabId);
-    }
-  });
-});
-
-chrome.tabs.onRemoved.addListener((tabId) => {
-  const openerTabId = openerMap.get(tabId);
-  openerMap.delete(tabId);
-  if (openerTabId == null) return;
-  chrome.tabs.get(openerTabId, (opener) => {
-    if (chrome.runtime.lastError || !opener) return; // 元のタブも既に閉じられている等
-    chrome.tabs.update(openerTabId, { active: true }, () => {
-      // 対象タブが既に閉じられている等のエラーは無視して良い
-      void chrome.runtime.lastError;
-    });
-  });
-});
+// この拡張機能のバックグラウンド側の役割は1つだけ：設定ページを開くこと。
+// 権限は storage のみ（chrome.tabs も chrome.debugger も使わない）。
+//
+// 【v3.74.0で削除】以前はここに「R/Fキーで開いた新しいタブを閉じたとき、
+// 元のタブへフォーカスを戻す」処理（chrome.tabs.onCreated/onRemoved）が
+// あった。削除した理由：
+//  (1) v3.55.0でR/Fキーは同タブSPA遷移(openEntrySameTab)に切り替わり、
+//      拡張機能自身が新しいタブを開くことは無くなった。残っていたのは
+//      ユーザーのCtrl+クリック等だけで、その場合ブラウザ標準の挙動で
+//      十分だった。
+//  (2) MV3のservice workerはアイドルで停止するため、モジュールスコープの
+//      openerMapは数十秒で消える。つまり機能自体がほとんど働いていなかった。
+//  (3) 上記のために必要だったtabs権限は、ブラウザ全体のタブ生成を監視し
+//      開いた側のURLを読む強い権限で、得られる価値に見合わない。
+// 結果として必要な権限は storage だけになった。
+//
+// 【v3.45.0で削除】さらに以前はchrome.debugger(CDP)経由の擬似ホイール
+// スクロールもあったが、効果が実機で確認できず、警告バー（「拡張機能が
+// このブラウザをデバッグしています」）の代償も大きいため廃止した。
 
 // 設定ページ(options.html)は brave://extensions の詳細から開く必要があり
 // 分かりにくいという指摘があったため、ツールバーに直接開けるボタンを
 // 追加した。chrome.runtime.openOptionsPage()はcontent script側からは
-// 呼べない（背景ページ/拡張機能ページからのみ）ため、メッセージ経由で
-// ここから開く。
+// 呼べない（拡張機能ページからのみ）ため、メッセージ経由でここから開く。
+// この機能に追加の権限は不要。
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === 'xmr-open-options') {
     chrome.runtime.openOptionsPage();
   }
 });
-
-// 【v3.45.0で削除】以前はここにchrome.debugger(CDP)経由の擬似ホイール
-// スクロール(simulateWheelScroll)があった。Xの仮想リスト再同期の最終手段
-// だったが、実機で「message port closed」により時々失敗する・効果自体も
-// 実機で確認できなかった一方、「本物のリロード」は確実に効くと確定済みの
-// ため、content.js側のtryResyncReload()（リロード方式）に一本化し、
-// debugger権限ごと廃止した。警告バー（「拡張機能がこのブラウザをデバッグ
-// しています」）も二度と出なくなった。

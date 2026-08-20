@@ -48,6 +48,7 @@
     "ja": {
       "extDescription": "Xのメディア欄・ホーム・いいねを画像グリッドに変え、投稿を開かずにいいね・ブックマーク・リポスト。キーボードだけでサクサク絵を見て回れる閲覧特化ツール（表示専用・自動操作なし）",
       "imageOnlyLabel": "画像のみ表示($1)",
+      "imageOnlyLabelPlain": "画像のみ表示",
       "scopeBookmarks": "ブックマーク",
       "scopeMedia": "メディア",
       "scopeLikes": "いいね",
@@ -174,6 +175,7 @@
     "en": {
       "extDescription": "Turn X's media tab, home & likes into an image grid. Like, bookmark & repost without opening posts. Display-only, no automation.",
       "imageOnlyLabel": "Images only ($1)",
+      "imageOnlyLabelPlain": "Images only",
       "scopeBookmarks": "Bookmarks",
       "scopeMedia": "Media",
       "scopeLikes": "Likes",
@@ -525,6 +527,16 @@
 
   function waitFor(checkFn, timeoutMs, intervalMs) {
     return new Promise((resolve) => {
+      // 【実機計測で判明した遅延の主因】以前は必ずsetIntervalの1周期目を
+      // 待ってから初回チェックしていた。条件が既に満たされていても待たされる
+      // うえ、Xの再描画でメインスレッドが忙しいとタイマーが大きく間引かれ、
+      // 50ms指定が実測449msになることもあった。戻る操作の復元が1.4秒
+      // かかっていた内訳の大半がこれ。まず同期的に1回確認して即座に返す。
+      const immediate = checkFn();
+      if (immediate) {
+        resolve(immediate);
+        return;
+      }
       const start = Date.now();
       const t = setInterval(() => {
         const v = checkFn();
@@ -925,11 +937,18 @@
   // 変わらずSPA内で切り替わる（実機確認：aria-selectedが同じ<button>群の上で
   // 付け替わるだけ、要素自体は再利用される）。
   function currentHomeTabText() {
-    // 表示用：選択中タブの表示文字列（トグルボタンのラベルにだけ使う）
+    // 表示用：選択中タブの表示文字列（トグルボタンのラベルにだけ使う）。
+    // タブがまだ描画されていない／どれも選択状態になっていない場合、以前は
+    // 'おすすめ'という日本語リテラルを返していたため、英語UIのユーザーに
+    // 「Image only (おすすめ): ON」と混ざって表示され得た。フォールバックは
+    // 先頭タブの実際の文字列を使い、それも無ければ空にする（ラベル側は
+    // 空文字なら括弧ごと省く）。
     const tablist = document.querySelector('[data-testid="primaryColumn"] [role="tablist"]');
-    if (!tablist) return 'おすすめ'; // タブがまだ無ければ従来通り(おすすめ相当)として扱う
+    if (!tablist) return '';
     const selected = tablist.querySelector('[role="tab"][aria-selected="true"]');
-    return selected ? selected.textContent.trim() : 'おすすめ';
+    if (selected) return selected.textContent.trim();
+    const first = tablist.querySelector('[role="tab"]');
+    return first ? first.textContent.trim() : '';
   }
 
   // 設定キー用のscope：Xの表示言語に依存しない識別子。先頭2タブ
@@ -1071,7 +1090,10 @@
     else if (scope === 'media') name = t('scopeMedia');
     else if (scope === 'likes') name = t('scopeLikes');
     else if (scope === 'search') name = t('scopeSearch');
-    return t('imageOnlyLabel', [name]) + ': ' + (on ? 'ON' : 'OFF');
+    // タブ名がまだ取れない場合（currentHomeTabTextが空を返す）は、括弧ごと
+    // 省いて「画像のみ表示: ON」と出す。中途半端な言語の混在を避けるため。
+    const base = name ? t('imageOnlyLabel', [name]) : t('imageOnlyLabelPlain');
+    return base + ': ' + (on ? 'ON' : 'OFF');
   }
   function refreshImageOnlyToggleLabel() {
     if (!imageOnlyToggleBtn) return;
@@ -3407,6 +3429,30 @@
   async function refreshHomeTimeline() {
     if (Grid.refreshing) return;
     Grid.refreshing = true;
+    // 【重要・安全策】この関数は途中でXのDOMを大量に触る（detachされ得る要素の
+    // click、getComputedStyleでの祖先walk等）ため、どこかで例外が出る可能性が
+    // ある。その時にGrid.holdTop / Grid.refreshing が立ったままになると、
+    // pumpMore()が二度と動かず（＝追加読み込みが永久に止まる）、更新ボタンも
+    // 二度と効かず、「更新中…」の表示も出っぱなしになる。呼び出し元は
+    // fire-and-forgetなのでこの例外は誰も捕まえない。必ず後始末する。
+    try {
+      await refreshHomeTimelineInner();
+    } catch (err) {
+      console.error('[X Media Grid] refresh failed:', err);
+    } finally {
+      Grid.holdTop = false;
+      Grid.refreshing = false;
+      if (Grid.refreshStatusEl) Grid.refreshStatusEl.textContent = '';
+      // 上端に留まる間だけ外していたXのヘッダーの非表示を、確実に戻す
+      // （戻し忘れるとXの本物のタブ一覧がグリッドの上に出たままになる）。
+      for (const el of Grid.unhiddenForHold || []) {
+        if (el.isConnected) el.classList.add('xmr-tablist-hide');
+      }
+      Grid.unhiddenForHold = null;
+    }
+  }
+
+  async function refreshHomeTimelineInner() {
     markAllLoadedAsSeen(); // 更新＝ここで一区切り（新着を読み込む前に今の分を既読にする）
     // 更新中であることが見た目で分かるように表示する。以前はグリッド下部の
     // 読み込み中表示(Grid.loadingEl)を流用していたが、更新中はまだ上の方を
@@ -3438,7 +3484,9 @@
     // IntersectionObserver等の可視判定が一切動かない。上端に留まる間だけ
     // 元に戻して、Xが未読状態を解除できるようにする（グリッド本体が上に
     // 被さっているのでユーザーには見えない）。
+    // 外した要素は呼び出し元のfinallyで確実に戻せるようGridに預ける
     const unhidden = [...document.querySelectorAll('.xmr-tablist-hide')];
+    Grid.unhiddenForHold = unhidden;
     for (const el of unhidden) el.classList.remove('xmr-tablist-hide');
     window.scrollTo(0, 0);
     // 一番上に着くまで待つ（実測では上端でもscrollYが50前後残る）。ここで
@@ -3529,10 +3577,14 @@
       const dotNow = !!(hl && hl.querySelector('svg ~ div'));
       if (!dotNow && (!dotWasOn || i >= 3)) break;
     }
-    // ヘッダーの非表示を元に戻す
-    for (const el of unhidden) {
+    // ここで確実に解除しておく。この下のresetGridEntries()はpumpMore()を
+    // 呼ぶが、holdTopが立ったままだとpumpMoreが即returnしてしまい、更新後の
+    // グリッドがタイル数件のまま伸びなくなる（呼び出し元のfinallyでの解除
+    // だけに任せると順序が逆になる）。finally側は例外時の保険として残す。
+    for (const el of Grid.unhiddenForHold || []) {
       if (el.isConnected) el.classList.add('xmr-tablist-hide');
     }
+    Grid.unhiddenForHold = null;
     Grid.holdTop = false;
     Grid.refreshing = false;
     if (Grid.refreshStatusEl) Grid.refreshStatusEl.textContent = '';
@@ -3797,7 +3849,10 @@
     const removeEarlyLoading = () => earlyLoading.remove();
 
     const cellSelector = '[data-testid="primaryColumn"] [data-testid="cellInnerDiv"]';
-    await waitFor(() => document.querySelector(cellSelector), 4000, 60);
+    // 戻り操作の復元を速くするため、ここで掴んだセルをキャッシュ復元側でも
+    // 使い回す（以前は同じ条件をもう一度waitForで待ち直しており、実機計測で
+    // その2回目だけで357ms消えていた）。
+    const firstCellEarly = await waitFor(() => document.querySelector(cellSelector), 4000, 60);
     if (token !== Grid.navToken || currentGridMode() !== mode) {
       removeEarlyLoading();
       return;
@@ -3840,7 +3895,12 @@
     let cacheFresh = !!(cached && cached.mode === mode && Date.now() - cached.savedAt < GRID_CACHE_TTL_MS);
     let firstCell = null;
     if (cacheFresh) {
-      firstCell = await waitFor(() => document.querySelector(cellSelector), 4000, 60);
+      // 上で既に待って掴んである。まだ生きていればそのまま使い、Xがこの間に
+      // リストを作り直していた時だけ待ち直す。
+      firstCell =
+        firstCellEarly && firstCellEarly.isConnected
+          ? firstCellEarly
+          : await waitFor(() => document.querySelector(cellSelector), 4000, 60);
       if (token !== Grid.navToken || currentGridMode() !== mode) {
         removeEarlyLoading();
         return;

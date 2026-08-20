@@ -11,6 +11,9 @@
       }
     }
   },
+  "imageOnlyLabelPlain": {
+    "message": "Images only"
+  },
   "scopeBookmarks": {
     "message": "Bookmarks"
   },
