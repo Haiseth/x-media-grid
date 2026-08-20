@@ -3250,6 +3250,15 @@
       [...primary.querySelectorAll('[role="button"], a, div[tabindex]')].find((el) => {
         if (el.children.length >= 6 || el.textContent.length > 40) return false;
         const t = el.textContent;
+        // 新フォーマット（実機スクショで確認）：「(アバター数枚)さんがポスト
+        // しました」— 数字を含まないため、旧来の数字必須条件では取れない。
+        // 「投稿者アバターのサムネイルを含む・浮いている(position:static
+        // ではない)・短い文言のピル」を新着バナーとみなす。
+        if (el.querySelector('img[src*="profile_images"]')) {
+          const cs = getComputedStyle(el);
+          if (cs.position !== 'static') return true;
+        }
+        // 旧フォーマット（数字あり）へのフォールバックも残す
         if (/\d/.test(t) && el.querySelector('img[src*="profile_images"]')) return true;
         return /件.*(ポスト|投稿)/.test(t) && t.length < 30;
       });
