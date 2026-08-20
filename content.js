@@ -3090,6 +3090,14 @@
   // --- 裏のリストを自分でスクロールさせ、Xの無限読み込みを誘発する ---
   async function pumpMore(targetCount) {
     if (Grid.pumping) return;
+    // 【実機で確定した重要な制約】Xは「ユーザーが実際にタイムラインの一番上に
+    // いる」ことを見て未読状態（ホームの青ドット・新着の告知）を解除する。
+    // タイルを集めるこの関数はウィンドウを2万px規模で下へ動かすため、更新
+    // 直後に走ると「上にいた」ことがX側に認識される前に離脱してしまい、
+    // ドットが永久に消えない（実機報告：ONだとバッジが取れない／OFFにして
+    // 手で上まで行くと、その瞬間にバッジが取れた）。更新処理が上端に
+    // 留まっている間はスクロールを開始しない。
+    if (Grid.holdTop) return;
     const token = Grid.navToken;
     Grid.pumping = true;
     if (Grid.loadingEl) Grid.loadingEl.style.display = 'block';
@@ -3109,7 +3117,7 @@
     // OFFにして手でゆっくりスクロールしてからONにする」と正しく全部
     // 拾えていたことから、大ジャンプではなく1画面分ずつ進める方式に変更する。
     for (let i = 0; i < 80 && Grid.entries.length < targetCount && Date.now() - lastGrowthAt < stagnantGiveUpMs; i++) {
-      if (token !== Grid.navToken || !Grid.active) break;
+      if (token !== Grid.navToken || !Grid.active || Grid.holdTop) break;
       window.scrollBy(0, Math.round(window.innerHeight * 0.8));
       // 実機報告「スクロール時のロードが0.3秒くらい遅い」への対応：以前は
       // ここで固定sleep(300)していたが、Xが既にデータを持っていて数十msで
@@ -3384,6 +3392,18 @@
     const primary = document.querySelector('[data-testid="primaryColumn"]');
     const homeLink = document.querySelector('[data-testid="AppTabBar_Home_Link"]');
     const cellSelector = '[data-testid="primaryColumn"] [data-testid="cellInnerDiv"]';
+    // 上端に留まる区間の開始。これを立てている間はpumpMore()が動かない
+    // （進行中のものも次のステップで抜ける）。これが無いと、更新が終わった
+    // 直後にタイル収集が2万px下へスクロールし、Xが「ユーザーは一番上にいる」
+    // と認識する前に離脱してしまい、青ドットが永久に消えない。
+    Grid.holdTop = true;
+    // Xのヘッダー（タブ一覧＝新着の告知が住んでいる領域）は、こちらが
+    // display:noneで隠している。display:noneはレイアウトを消すので、その中の
+    // IntersectionObserver等の可視判定が一切動かない。上端に留まる間だけ
+    // 元に戻して、Xが未読状態を解除できるようにする（グリッド本体が上に
+    // 被さっているのでユーザーには見えない）。
+    const unhidden = [...document.querySelectorAll('.xmr-tablist-hide')];
+    for (const el of unhidden) el.classList.remove('xmr-tablist-hide');
     window.scrollTo(0, 0);
     // 一番上に着くまで待つ（実測では上端でもscrollYが50前後残る）。ここで
     // 上に戻すのは「新着取り込みバー」が仮想リストに現れるのが最上部の時
@@ -3448,27 +3468,40 @@
         if (i === 10 && tryResyncReload()) return;
       }
     }
+    // 【ここが要】上端に留まってXに「ユーザーは一番上にいる」と認識させる。
+    // 実機報告：画像のみ表示OFFにして手で上まで行くと、その瞬間に青バッジが
+    // 取れた＝Xは上端の可視状態を見て未読を解除している。従来はここで即座に
+    // タイル収集（2万px下へスクロール）が始まっていたため、上端に居た時間が
+    // 実質ゼロで、ドットが永久に消えなかった。
+    window.scrollTo(0, 0);
+    for (let i = 0; i < 25; i++) {
+      await sleep(120);
+      if (token !== Grid.navToken) break;
+      if (window.scrollY > 4) window.scrollTo(0, 0);
+      // ドットが消えたら目的達成なので早く抜ける（無駄に待たない）
+      const hl = document.querySelector('[data-testid="AppTabBar_Home_Link"]');
+      if (i > 8 && hl && !hl.querySelector('svg ~ div')) break;
+    }
+    // ヘッダーの非表示を元に戻す
+    for (const el of unhidden) {
+      if (el.isConnected) el.classList.add('xmr-tablist-hide');
+    }
+    Grid.holdTop = false;
     Grid.refreshing = false;
     if (Grid.refreshStatusEl) Grid.refreshStatusEl.textContent = '';
     if (token !== Grid.navToken) return; // その間に他のページへ移動していたら何もしない
     if (Grid.active && Grid.mode === 'home') {
-      resetGridEntries();
-      // 取り込み済みのピルは「消化済み」として印を付け、以後のバナー判定から
-      // 外す（Xはピル要素をDOMに残し続けるため）。
+      // 上端に留まっている今この瞬間だけ、取り込みバーの有無が「本当に未読が
+      // 残っているか」の確定情報になる（バーは上端でしか描画されないため）。
+      // 残っていなければピルに消化済みの印を付け、バナーを確実に消す。
       const pc2 = document.querySelector('[data-testid="primaryColumn"]');
-      if (pc2) {
+      const stillPending = !!findNewPostsBar();
+      if (pc2 && !stillPending) {
         for (const l of pc2.querySelectorAll('[data-testid="pillLabel"]')) {
           l.dataset.xmrStalePill = pillContentSig(l);
         }
       }
-      // 【実機で確定・重要】青ドットは、取り込みバーを押して29件を実際に
-      // 合流させても一度も消えない（0.5秒刻み×20回すべて点灯を観測）。
-      // 新着が絶え間なく届くフィードでは、ドットもピルも数秒で復活するため、
-      // これらをそのままバナーの条件にすると「押しても消えない＝壊れている」
-      // としか見えない（実機報告：「消えた瞬間がないわけ」）。
-      // 更新が完了したら一定時間バナーを黙らせ、「取り込んだ」ことが目で
-      // 分かるようにする。この間に届いた分は次の点灯で拾える。
-      Grid.bannerSnoozeUntil = Date.now() + 90 * 1000;
+      resetGridEntries();
     }
   }
 
@@ -4416,12 +4449,13 @@
         // だけ付く）がある。ドットのDOM上の存在（ナビリンク内のsvgの後ろの
         // div。実機観測で確定した構造）もトリガーに含める。設定でドットを
         // 非表示にしていてもdisplay:noneなだけで要素は存在するので検知できる。
-        const homeLink = document.querySelector('[data-testid="AppTabBar_Home_Link"]');
-        const homeDot = homeLink && homeLink.querySelector('svg ~ div');
-        // 更新直後のスヌーズ中は、ドットもピルも無視して黙る（上の
-        // refreshHomeTimeline()末尾のコメント参照）。
-        const snoozed = Date.now() < (Grid.bannerSnoozeUntil || 0);
-        const show = (!!pill || !!homeDot) && !snoozed && !Grid.refreshing && Settings.newPostsBanner;
+        // バナーの点灯条件は「未消化の告知ピルがあること」だけにする。
+        // 以前はホームの青ドットも条件に入れていたが、ドットは
+        // 「タイムラインの一番上を実際に見る」まで消えないX側の仕様なので、
+        // グリッド表示中は点きっぱなしになりがちで、バナーが永久に消えない
+        // 原因になっていた（実機報告：「消えた瞬間がないわけ」）。ドットの
+        // 解除自体は更新処理側で上端に留まることで面倒を見る。
+        const show = !!pill && !Grid.refreshing && Settings.newPostsBanner;
         if ((npBtn.style.display === 'none') === show) {
           npBtn.style.display = show ? 'block' : 'none';
           if (show) syncTabbarTop();
