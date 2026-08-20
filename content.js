@@ -3347,27 +3347,32 @@
     // 見ている（＝画面外）ことが多く気付きにくいという指摘があったため、
     // 常にスクロール位置に関係なく見えるツールバー（sticky）側の専用要素に変更。
     if (Grid.refreshStatusEl) Grid.refreshStatusEl.textContent = t('refreshing');
-    // 【設計メモ（2026-08-20/21の実機検証で確定）】この関数の更新は
-    // ホームリンクの合成クリック＝「タイムラインの引き直し」。ピルが告知
-    // するポスト群そのものの合流は、本物ピルへのトラステッドクリック以外の
-    // 全手段が無効（合成click/PointerEvent列/キー'.'/Reactのprops.onClick
-    // 直呼び/SPA往復/最上部での待機、全て実機で不発。Xは信頼済みポインタ
-    // 入力でしか武装解除しない設計と判断）。そのためピルの合流はバナー側の
-    // 「受け渡し」（グリッド一時解除→ユーザーが本物ピルをクリック→自動
-    // 再開）が担い、ここはピルが無い時の更新手段として働く。
-    // 一時はリロード一択に振ったが「リロードは最悪」との実機フィードバック
-    // で撤回。リロードは仮想リスト停止時の最後の保険(tryResyncReload)のみ。
+    // 【2026-08-21の実機検証で確定した真因】Xのホームボタンは2段構えで、
+    // 「下にスクロールしている時は一番上へ戻るだけ／既に一番上にいる時に
+    // 初めて新着を取り込む」という挙動をする。グリッド表示中はタイルを
+    // 集めるためにウィンドウを深く（実測17000px）スクロールしたままなので、
+    // ユーザーが本物のホームボタンを押しても「上へ戻る」だけで終わり、
+    // 取り込みまで進まない。これが「画像のみ表示OFFなら効くのにONだと
+    // 効かない」「新着ボタンが消えない」の正体だった（従来はクリックしてから
+    // scrollTo(0,0)という逆順だったため、常にこの罠を踏んでいた）。
+    // 先に一番上へ戻し、Xが「もう上にいる」と認識してからクリックする。
+    // これで新着の取り込みが実際に起きることを実機確認済み（新着ボタンの
+    // 中身が別のものに入れ替わる＝消化されたことを指紋で確認）。
     const token = Grid.navToken;
     const primary = document.querySelector('[data-testid="primaryColumn"]');
     const homeLink = document.querySelector('[data-testid="AppTabBar_Home_Link"]');
-    // レース対策の指紋：ホームクリック自体は効くが、Xが新TLをfetchし終える
-    // まで1〜2秒かかる。先頭ツイートの入れ替わりを待たずに組み直すと
-    // 「更新したのに同じ内容」になる（実機で確定した過去バグ）。
+    // レース対策の指紋：Xが新TLをfetchし終えるまで1〜2秒かかる。先頭
+    // ツイートの入れ替わりを待たずに組み直すと「更新したのに同じ内容」に
+    // なる（実機で確定した過去バグ）。
     const topLink0 = primary && primary.querySelector('[data-testid="cellInnerDiv"] article a[href*="/status/"]');
     const srcTopBefore = topLink0 ? topLink0.getAttribute('href') : null;
-    if (homeLink) homeLink.click();
     const cellSelector = '[data-testid="primaryColumn"] [data-testid="cellInnerDiv"]';
     window.scrollTo(0, 0);
+    // 「もう上にいる」とXに認識させてからクリックする。スムーススクロール等で
+    // 実際に上へ着くまで少し待つ（実測では上端でもscrollYが50前後残る）。
+    for (let i = 0; i < 20 && window.scrollY > 80; i++) await sleep(100);
+    await sleep(400);
+    if (homeLink) homeLink.click();
     for (let i = 0; i < 40; i++) {
       await sleep(300);
       if (token !== Grid.navToken) break;
@@ -3411,46 +3416,16 @@
     (e) => {
       if (!Grid.active || Grid.mode !== 'home' || Grid.refreshing) return;
       const homeLink = e.target.closest && e.target.closest('[data-testid="AppTabBar_Home_Link"]');
-      if (homeLink) refreshHomeTimeline();
+      if (!homeLink) return;
+      // ユーザーが本物のホームボタンを押した場合も、その時点ではウィンドウが
+      // 深くスクロールしているので、Xはその1発目を「一番上へ戻る」に使って
+      // しまい取り込みまで進まない（上のコメント参照）。同じ手順
+      // （上へ戻す→もう一度クリック）を走らせて必ず取り込ませる。
+      refreshHomeTimeline();
     },
     true
   );
 
-  // 新着ピルの受け渡し：グリッドを一時解除して見せた本物ピルへの
-  // トラステッドクリックを検知し、Xの合流（ピルの格納）を待ってから
-  // グリッドを自動再開する。スナップショットは合流前の内容なので破棄して
-  // 新着入りで組み直す。
-  document.addEventListener(
-    'click',
-    (e) => {
-      if (!Grid.pillHandoff) return;
-      if (Date.now() > Grid.pillHandoff.until) {
-        Grid.pillHandoff = null;
-        return;
-      }
-      if (!e.isTrusted || !(e.target && e.target.closest)) return;
-      const btn = e.target.closest('button, [role="button"]');
-      if (!btn || !btn.querySelector('[data-testid="pillLabel"]')) return;
-      Grid.pillHandoff = null;
-      (async () => {
-        // 合流完了＝ピルが消えるか格納状態(aria-hidden)に戻るのを待つ
-        for (let i = 0; i < 20; i++) {
-          await sleep(300);
-          const pc = document.querySelector('[data-testid="primaryColumn"]');
-          if (pc && !findNewPostsPillButton(pc)) break;
-        }
-        await sleep(600); // 先頭挿入の描画が落ち着くまで少し待つ
-        if (!Grid.active && location.pathname === '/home') {
-          GridCache.delete(location.href + '::' + (currentImageOnlyScope() || ''));
-          try {
-            sessionStorage.setItem('xmr-dot-snooze', String(Date.now() + 3 * 60 * 1000));
-          } catch (err) {}
-          activateGrid('home');
-        }
-      })();
-    },
-    true
-  );
 
 
   // 検索ボックスの経緯（長い）：
@@ -3552,11 +3527,6 @@
   );
 
   async function activateGrid(mode) {
-    // 新着ピルの受け渡し中（ユーザーが本物ピルをクリックするのを待っている
-    // 間）は、homeTabObserver等からの自動再グリッド化でピルが隠れないよう
-    // ブロックする。受け渡し完了/タイムアウト側は先にpillHandoffをクリア
-    // してから呼ぶのでここは通過する。
-    if (mode === 'home' && Grid.pillHandoff && Date.now() < Grid.pillHandoff.until) return;
     // modeだけでなくlocation.hrefも見て早期returnを判定する。同じ'media'
     // モードのまま「画像」⇔「動画」ピルで/media?filter=photoとbare/media
     // を行き来した場合（実機で用意した新機能）、modeの文字列は両方とも
@@ -4357,29 +4327,7 @@
       npBtn.style.display = 'none';
       npBtn.addEventListener('click', () => {
         npBtn.style.display = 'none';
-        // 表示状態（アクティブ）の本物ピルがあるなら「受け渡し」：グリッドを
-        // 一時解除して本物ピルをそのまま見せ、ユーザーのトラステッドクリック
-        // に委ねる（拡張からの合流は全手段が実機で不発。findNewPostsPillButton
-        // が格納状態(aria-hidden)を弾くようになったので、受け渡しが発動する
-        // 時は必ずピルが実際に見えている）。クリック検知と自動再開は
-        // pillHandoffリスナーが行う。ピルが無い（ドットのみ等）なら従来の
-        // 引き直し更新（リロード無し）。
-        const primaryEl = document.querySelector('[data-testid="primaryColumn"]');
-        const realPill = primaryEl && findNewPostsPillButton(primaryEl);
-        if (realPill) {
-          Grid.pillHandoff = { until: Date.now() + 45000 };
-          deactivateGrid();
-          window.scrollTo(0, 0);
-          // 45秒待ってもピルが押されなければ諦めてグリッドを復元する
-          // （解除時のスナップショットがあるので即座に元の表示へ戻る）
-          setTimeout(() => {
-            if (!Grid.pillHandoff) return;
-            Grid.pillHandoff = null;
-            if (!Grid.active && location.pathname === '/home') activateGrid('home');
-          }, 45000);
-        } else {
-          refreshHomeTimeline();
-        }
+        refreshHomeTimeline();
       });
       shell.appendChild(npBtn);
       Grid.newPostsBtn = npBtn;
