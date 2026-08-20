@@ -2893,6 +2893,40 @@
   // （appendChildは既にDOMに繋がっている要素を新しい位置へ「移動」させる
   // ので、要素を作り直す必要はない）。ユーザーがまだ操作していない
   // 前提の処理なので、選択位置(selIndex)は0のまま据え置いてよい。
+  // マウスホイールだけで既に見始めている人向けの並び替え。並び順は整えるが、
+  // 「今見えている場所」と「選択中のタイル」は動かさない（実機報告：見ている
+  // 最中に勝手に一番左上へ戻される）。画面内の一番上のタイルを基準として
+  // 控えておき、並び替え後にそのタイルが同じ位置に来るようスクロールを補正する。
+  function settleGridOrderKeepingView() {
+    const shell = Grid.shellEl;
+    const selEntry = Grid.entries[Grid.selIndex] || null;
+    let anchor = null;
+    let anchorOffset = 0;
+    if (shell) {
+      const sr = shell.getBoundingClientRect();
+      for (const en of Grid.entries) {
+        if (!en.tileEl) continue;
+        const r = en.tileEl.getBoundingClientRect();
+        if (r.bottom > sr.top) {
+          anchor = en;
+          anchorOffset = r.top - sr.top;
+          break;
+        }
+      }
+    }
+    settleGridOrder();
+    if (selEntry) {
+      const i = Grid.entries.indexOf(selEntry);
+      if (i >= 0) Grid.selIndex = i;
+    }
+    paintSelection(true); // 枠の塗り直しだけ。scrollIntoViewは呼ばせない
+    if (shell && anchor && anchor.tileEl) {
+      const sr = shell.getBoundingClientRect();
+      const r = anchor.tileEl.getBoundingClientRect();
+      shell.scrollTop += r.top - sr.top - anchorOffset;
+    }
+  }
+
   function settleGridOrder() {
     if (!Grid.gridEl || Grid.entries.length === 0) return;
     Grid.entries.sort((a, b) => a.ty - b.ty);
@@ -3223,6 +3257,7 @@
     Grid.filterVideoOnly = false;
     Grid.sidebarPeekOpen = false;
     Grid.userHasNavigated = false;
+    Grid.userHasScrolled = false;
     Grid.activatingMode = null;
     Grid.activatingHref = null;
     if (Grid.overlay) Grid.overlay.classList.remove('xmr-open');
@@ -3248,6 +3283,7 @@
     Grid.selIndex = 0;
     Grid.maxSeenIndex = -1; // 新しく読み込み直した分なので、既読の到達位置もリセットする
     Grid.userHasNavigated = false; // 作り直した分なので、並び替えスキップ判定も初期状態に戻す
+    Grid.userHasScrolled = false;
     Grid.level = 'grid';
     // 実機調査で判明した重大バグ：更新してもXの仮想リストが同じDOM要素を
     // 使い回すことが多く（実際に新着があっても無くても）、それらの要素には
@@ -4552,6 +4588,13 @@
       // 体感の一因だった。2画面分手前から先読みを始める。
       const nearBottom = shell.scrollTop + shell.clientHeight > shell.scrollHeight - shell.clientHeight * 2;
       if (nearBottom) pumpMore(Grid.entries.length + CONFIG.pumpBatchCount);
+      // 【実機報告：スクロールして見ていたら勝手に左上へ戻された】
+      // 初回一括読み込みの完了コールバックが選択位置を0へリセットするが、
+      // その抑止フラグ(userHasNavigated)はWASD/Spaceでしか立たず、マウス
+      // ホイールだけで見ている人は「まだ操作していない」扱いのままだった。
+      // 自前のscrollIntoView由来ではない＝本人が動かしたスクロールを
+      // 「もう見始めている」印として記録する。
+      if (Date.now() >= suppressScrollSyncUntil) Grid.userHasScrolled = true;
       // 選択位置の追従は毎フレーム重い処理をしないよう、rAFで1フレームに
       // 1回までに間引く。
       if (!scrollSelSyncScheduled) {
@@ -4575,6 +4618,11 @@
     if (!cacheFresh) {
       pumpMore(CONFIG.initialFillCount).then(() => {
         if (Grid.userHasNavigated) return;
+        // マウスホイールで既に見ている人の位置を奪わない（上のコメント参照）
+        if (Grid.userHasScrolled) {
+          settleGridOrderKeepingView();
+          return;
+        }
         settleGridOrder();
         Grid.selIndex = 0;
         paintSelection();
