@@ -559,17 +559,14 @@
       sessionStorage.setItem(RESYNC_RELOAD_KEY, JSON.stringify({ href: location.href, at: Date.now() }));
     } catch (e) {}
   }
+  // 【実機フィードバックにより無効化】仮想リストが停止した時の保険として
+  // ページリロードを1回だけ行っていたが、「リロードするのはうざい・消して」と
+  // 明確な指示があったため常にfalseを返す（＝リロードしない）。呼び出し側は
+  // いずれもfalseの時のフォールバック（scrollToのリトライ継続、
+  // 「マウスホイールを一度スクロールしてください」の案内）を持っているので、
+  // 動作は止まらず、単にリロードだけが起きなくなる。
   function tryResyncReload() {
-    try {
-      const rec = JSON.parse(sessionStorage.getItem(RESYNC_RELOAD_KEY) || 'null');
-      if (rec && rec.href === location.href && Date.now() - rec.at < RESYNC_RELOAD_TTL_MS) return false;
-    } catch (e) {
-      return false; // sessionStorageが読めない環境では安全側＝リロードしない
-    }
-    markResyncReload();
-    flushSeenTweetsNow(); // 2秒デバウンス待ちの既読データを先に確定させる
-    location.reload();
-    return true;
+    return false;
   }
 
   function onUrlChange(cb) {
@@ -1935,7 +1932,10 @@
     // （#xmr-freshの印を付けて開き、下のREOAD_MARKER処理で検知して
     // マーカーを外してからlocation.reload()する）。一瞬ちらつくトレードオフ
     // はあるが、内容が古いままになるよりはこちらを優先する。
-    return author ? 'https://x.com/' + author + '/media#xmr-fresh' : null;
+    // ※#xmr-freshの自動リロードは「リロードは体験を壊す」という指摘により
+    //   廃止（マーカーを付けるのをやめた）。中身が古いままになるケースは
+    //   同タブSPA遷移が主流になったことで実質的に解消している。
+    return author ? 'https://x.com/' + author + '/media' : null;
   }
 
   // Xの内部ルーター(SPA)で同じタブ内を遷移する。
@@ -4207,8 +4207,13 @@
       if (Grid.mode === 'home') {
         refreshHomeTimeline();
       } else {
+        // メディア/いいね/ブックマークには「新着取り込みバー」が無いので、
+        // 以前はページリロードで作り直していた。リロードは体験を壊すという
+        // 指摘があったため、グリッドだけを組み直す方式に変更（Xの裏の
+        // タイムラインDOMはそのまま使い、こちらのタイル・既読表示を
+        // 拾い直す）。
         markAllLoadedAsSeen(); // 更新＝ここで一区切り
-        location.reload();
+        resetGridEntries();
       }
     });
 
