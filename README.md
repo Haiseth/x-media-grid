@@ -7,12 +7,16 @@ Turn X's media tab, home timeline, likes, bookmarks and search results into an i
 and like, bookmark, repost or reply **without opening a single post**.
 For people who open X to look at images.
 
-> Chrome Web Store: （審査通過後にリンクを掲載 / link coming after review）
+> **Chrome ウェブストアで公開中 / Available on the Chrome Web Store**
+> https://chromewebstore.google.com/detail/hhfmclfmffmddecaepcgpfiffjmbebim
+>
+> Chrome・Brave・Edge など Chromium 系ブラウザで使えます。
 
 ## 主な機能 / Features
 
 - **画像を優先して表示** — 最近のXはメディア欄を開くと動画側が出ます。この拡張は画像側を優先して開きます。動画を見たい時はツールバーの「動画」をワンクリックするか、設定で動画優先に戻せます
-- **グリッド表示** — メディア欄/ホーム/いいね/ブックマーク/検索結果を画像グリッド化。ボタン一つでXの通常表示にいつでも戻せます
+- **グリッド表示** — メディア欄/ホーム/いいね/ブックマーク/検索結果を画像グリッド化
+- **ワンクリックでON/OFF** — 画面左下のボタンを押すだけでXの通常表示に戻せます。設定画面を開く必要はありません。ON/OFFは場所ごとに記憶するので「メディア欄はグリッド、ホームは通常表示」も可能
 - **列数は1〜10** — しかも場所ごとに別々に記憶します（メディア欄は3列、ホームは5列…といった使い分けがそのまま残ります）
 - **開かずに操作** — ホバーで ♥/🔖/🔁/💬。同じ操作をキーボードからも行えます
 - **キーボード閲覧** — WASD/矢印で移動、Qで拡大、Spaceでスクロール。**キー割り当ては全て変更可能・使わないキーは無効化も可能**
