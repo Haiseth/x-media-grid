@@ -2402,6 +2402,17 @@
   // X側から見ても「自動でいいねを連打している」ようにしか見えず、
   // 「表示専用・操作はユーザーが押した時だけ」という本拡張の前提が崩れる。
   // 移動キー(WASD)とSpaceは連続入力が自然なのでリピートを許可する。
+  // 【実機報告のバグ】TLグリッドで Q→D→R→R と押すと返信欄が開く。さらに
+  // 別アカウントへ飛びながら返信欄が開くという二重の誤動作も確認された。
+  // Xには独自のキーボードショートカット（r=返信、g=移動プレフィックス等）が
+  // あり、preventDefault()しただけでは伝播が止まらないためXのハンドラにも
+  // 同じキーが届いて二重発火していた。こちらが割り当てているキーは、
+  // こちらで処理してもしなくてもXへ渡さない。
+  function swallowKey(e) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  }
+
   function isRepeatUnsafeKey(k) {
     const s = Settings.keys;
     return (
@@ -2474,32 +2485,32 @@
       return;
     }
     if (k === Settings.keys.openTweet) {
-      e.preventDefault();
+      swallowKey(e);
       openInNewTab(false);
       return;
     }
     if (k === Settings.keys.openMedia) {
-      e.preventDefault();
+      swallowKey(e);
       openInNewTab(true);
       return;
     }
     if (k === Settings.keys.like) {
-      e.preventDefault();
+      swallowKey(e);
       pressActionButton(['like', 'unlike']);
       return;
     }
     if (k === Settings.keys.bookmark) {
-      e.preventDefault();
+      swallowKey(e);
       pressActionButton(['bookmark', 'removeBookmark']);
       return;
     }
     if (k === Settings.keys.reply) {
-      e.preventDefault();
+      swallowKey(e);
       openReplyComposer();
       return;
     }
     if (k === Settings.keys.retweet) {
-      e.preventDefault();
+      swallowKey(e);
       pressRetweet();
       return;
     }
@@ -2672,22 +2683,22 @@
     // いいね/ブックマークは、画像を開いていてもW/Sで選択しているだけでも
     // どちらでも使えるようにする（開かないと押せないのは不便なため）。
     if (k === Settings.keys.like) {
-      e.preventDefault();
+      swallowKey(e);
       pressActionButton(['like', 'unlike']);
       return;
     }
     if (k === Settings.keys.bookmark) {
-      e.preventDefault();
+      swallowKey(e);
       pressActionButton(['bookmark', 'removeBookmark']);
       return;
     }
     if (k === Settings.keys.reply) {
-      e.preventDefault();
+      swallowKey(e);
       openReplyComposer();
       return;
     }
     if (k === Settings.keys.retweet) {
-      e.preventDefault();
+      swallowKey(e);
       pressRetweet();
       return;
     }
@@ -2704,8 +2715,8 @@
             const a = NativeNav.el.querySelector('[data-testid="User-Name"] a[href^="/"]');
             return a ? a.getAttribute('href').split('/')[1] : null;
           })());
+      swallowKey(e); // 飛べない場合でもXのショートカットには渡さない
       if (author) {
-        e.preventDefault();
         xmrSpaNavigate(
           Settings.fTarget === 'media' ? '/' + author + '/media?filter=photo' : '/' + author
         );
@@ -2714,12 +2725,12 @@
     }
     // Rは「その投稿を開く」。投稿ページでは既に開いているので何もしない。
     if (k === Settings.keys.openTweet) {
+      swallowKey(e); // 投稿ページでは何もしないが、Xの「r=返信」には渡さない
       if (isStatusPage()) return;
       const el = nativeSelectionAlive();
       if (!el) return;
       const link = el.querySelector('a[href*="/status/"]');
       if (!link) return;
-      e.preventDefault();
       xmrSpaNavigate(link.getAttribute('href'));
       return;
     }
