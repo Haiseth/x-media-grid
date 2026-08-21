@@ -1514,7 +1514,11 @@
   function openViewer() {
     // テキストのみのエントリを除いた「画像だけの平坦なリスト」を作ってから開く
     // （href遷移(Enter)のためentryオブジェクトごと保持する）
-    Grid.viewList = Grid.entries.filter((en) => en.type !== 'text');
+    // 【実機報告のバグ】「未読のみ表示」中でも拡大表示のA/Dで既読の投稿へ
+    // 移動できてしまっていた。グリッドはCSSで隠しているだけで、このリストは
+    // 全エントリから作っていたため。グリッドで見えているものと、拡大表示で
+    // 辿れるものを一致させる。
+    Grid.viewList = Grid.entries.filter((en) => en.type !== 'text' && !tileIsFilteredOut(en));
     const entry = Grid.entries[Grid.selIndex];
     const idx = entry ? Grid.viewList.indexOf(entry) : -1;
     Grid.viewIndex = idx >= 0 ? idx : 0;
@@ -2135,7 +2139,14 @@
   // 乗り換え先も単独表示のまま続けられるようにする（一覧に戻ってしまわないように）。
   function moveToAdjacentEntry(delta, focusMode) {
     let i = Grid.selIndex + delta;
-    while (i >= 0 && i < Grid.entries.length && Grid.entries[i].type !== 'photo') i += delta;
+    // 「未読のみ表示」等で隠れているものは、拡大表示でも飛ばす（グリッドで
+    // 見えていないものへ移動できてしまうのは一貫性がないため）
+    while (
+      i >= 0 &&
+      i < Grid.entries.length &&
+      (Grid.entries[i].type !== 'photo' || tileIsFilteredOut(Grid.entries[i]))
+    )
+      i += delta;
     if (i < 0 || i >= Grid.entries.length) return false; // 端まで来た。何もしない
     Grid.selIndex = i;
     paintSelection();
@@ -2265,7 +2276,22 @@
     // W/S（縦移動）は今まで通り、選択中タイルの実際の描画位置から
     // 一番近い表示中タイルを探す（列を保つ意味が薄れるうえ、詰まった後の
     // 行の境目はインデックス計算だけでは分からないため）。
-    const cur = Grid.entries[Grid.selIndex];
+    let cur = Grid.entries[Grid.selIndex];
+    // 起点自身がフィルタで隠れている（display:noneなので矩形が全て0）と、
+    // 座標基準の探索が破綻して意図しないタイルへ飛ぶ。先に表示中のタイルへ
+    // 寄せてから探す。
+    if (cur && tileIsFilteredOut(cur)) {
+      let j = Grid.selIndex;
+      let guard = 0;
+      const dir = delta > 0 ? 1 : -1;
+      do {
+        j += dir;
+        guard++;
+      } while (j >= 0 && j < Grid.entries.length && tileIsFilteredOut(Grid.entries[j]) && guard <= Grid.entries.length);
+      if (j < 0 || j >= Grid.entries.length) return;
+      Grid.selIndex = j;
+      cur = Grid.entries[j];
+    }
     const curTile = cur && cur.tileEl;
     if (!curTile) return;
     const next = spatialNeighbor(curTile, delta > 0 ? 'down' : 'up');
@@ -4711,22 +4737,16 @@
       Grid.newPostsTimer = setInterval(() => {
         if (!Grid.active || Grid.mode !== 'home') return;
         const pill = findNewPostsPillButton(document.querySelector('[data-testid="primaryColumn"]'));
-        // 本物ピルの「穴あき表示」：ピルは合成クリックに反応しない（trusted
-        // 要求。実機確定）ため、代理クリックではなく本物をグリッドの上に
-        // 露出させ、ユーザー自身のトラステッドクリックをそのまま届かせる。
-        // ピルを内包する隠し要素をhard(display:none)→soft(visibility:hidden+
-        // 子孫のピルだけvisible)に差し替える。ピルが消えたら元に戻す。
-        // 実機フィードバック：戻ってきた直後はキャッシュ復元のため、Xが
-        // ピルを出さずに新着を抱えているケース（ホームアイコンに青ドット
-        // だけ付く）がある。ドットのDOM上の存在（ナビリンク内のsvgの後ろの
-        // div。実機観測で確定した構造）もトリガーに含める。設定でドットを
-        // 非表示にしていてもdisplay:noneなだけで要素は存在するので検知できる。
-        // バナーの点灯条件は「未消化の告知ピルがあること」だけにする。
-        // 以前はホームの青ドットも条件に入れていたが、ドットは
-        // 「タイムラインの一番上を実際に見る」まで消えないX側の仕様なので、
-        // グリッド表示中は点きっぱなしになりがちで、バナーが永久に消えない
-        // 原因になっていた（実機報告：「消えた瞬間がないわけ」）。ドットの
-        // 解除自体は更新処理側で上端に留まることで面倒を見る。
+        // このバナーの役割は「通知」だけで、押した時の動作はXのホームボタンを
+        // 押した時と同一（どちらもrefreshHomeTimeline()を呼ぶ）。グリッドが
+        // Xの新着ピルを覆ってしまうため、その告知だけを代わりに出している。
+        //
+        // 点灯条件は「未消化の告知ピルがあること」だけ。以前はホームの青ドットも
+        // 条件に入れていたが、ドットは「タイムラインの一番上を実際に見る」まで
+        // 消えないX側の仕様で、グリッド表示中は点きっぱなしになりがちだった。
+        // その結果バナーが永久に消えず「押しても消えない＝壊れている」ように
+        // しか見えなかった（実機報告：「消えた瞬間がないわけ」）。ドットの
+        // 解除自体は更新処理側で上端に留まることで面倒を見ている。
         const show = !!pill && !Grid.refreshing && Settings.newPostsBanner;
         if ((npBtn.style.display === 'none') === show) {
           npBtn.style.display = show ? 'block' : 'none';
