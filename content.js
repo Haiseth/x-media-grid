@@ -2462,7 +2462,12 @@
     // （複数画像のときQを連打すると開きっぱなしで閉じられない、という事故があったため）。
     if (k === Settings.keys.openClose) {
       e.preventDefault();
-      if (Grid.level === 'grid') activateSelected();
+      // 状態がズレていても必ず閉じられるようにする保険：オーバーレイが
+      // 開いているのにレベルがgridになっている場合は「閉じる」を優先する
+      // （閉じる手段が無くなってリロードを強いられるのが最悪のため）。
+      const overlayOpen = Grid.overlay && Grid.overlay.classList.contains('xmr-open');
+      if (Grid.level === 'grid' && !overlayOpen) activateSelected();
+      else if (Grid.level === 'grid') Grid.overlay.classList.remove('xmr-open');
       else closeOverlayLevel();
       return;
     }
@@ -2507,6 +2512,10 @@
       if (Grid.level !== 'grid') {
         e.preventDefault();
         closeOverlayLevel();
+      } else if (Grid.overlay && Grid.overlay.classList.contains('xmr-open')) {
+        // Qと同じ保険。状態がズレていてもEscで必ず閉じられるようにする。
+        e.preventDefault();
+        Grid.overlay.classList.remove('xmr-open');
       }
       return;
     }
@@ -3470,6 +3479,12 @@
     Grid.maxSeenIndex = -1; // 新しく読み込み直した分なので、既読の到達位置もリセットする
     Grid.userHasNavigated = false; // 作り直した分なので、並び替えスキップ判定も初期状態に戻す
     Grid.userHasScrolled = false;
+    // 【実機報告のバグ】更新（約3秒）の最中に画像を開くと、閉じられなくなり
+    // リロードするしかなくなっていた。ここでGrid.levelを'grid'に戻す一方で、
+    // 開いている拡大表示は閉じていなかったため、「オーバーレイは開いている
+    // のにレベルはgrid」という矛盾した状態になり、Qが閉じる側ではなく
+    // 開く側の分岐に入って永久に閉じられなくなっていた。
+    if (Grid.overlay) Grid.overlay.classList.remove('xmr-open');
     Grid.level = 'grid';
     // 実機調査で判明した重大バグ：更新してもXの仮想リストが同じDOM要素を
     // 使い回すことが多く（実際に新着があっても無くても）、それらの要素には
