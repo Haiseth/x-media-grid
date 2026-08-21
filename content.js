@@ -1703,7 +1703,7 @@
   // fnの戻り値に関わらず、articleを見つけて実行できたらtrueを返す。
   async function withEntryArticle(entry, fn) {
     if (!entry) return false;
-    let article = Grid.active ? articleForEntry(entry) : NativeNav.el && NativeNav.el.querySelector('article');
+    let article = Grid.active ? articleForEntry(entry) : (nativeSelectionAlive() && NativeNav.el.querySelector('article'));
     if (article) {
       await fn(article);
       return true;
@@ -1826,7 +1826,7 @@
     }
     // 通常タイムライン（グリッド未使用。ビューアだけ開いている場合も含む）
     // はW/Sで選択中の記事から直接探す
-    const article = NativeNav.el ? NativeNav.el.querySelector('article') : null;
+    const article = nativeSelectionAlive() ? NativeNav.el.querySelector('article') : null;
     if (!article) {
       showActionToast(t('toastNoSelection'));
       return;
@@ -1902,7 +1902,7 @@
       }
       return retweetEntry(entry);
     }
-    const article = NativeNav.el ? NativeNav.el.querySelector('article') : null;
+    const article = nativeSelectionAlive() ? NativeNav.el.querySelector('article') : null;
     if (!article) {
       showActionToast(t('toastNoSelection'));
       return;
@@ -1940,7 +1940,7 @@
       return openReplyComposerForEntry(entry);
     }
     // 通常タイムライン（ビューアのみ表示中も含む）はW/S選択中の記事から
-    const article = NativeNav.el ? NativeNav.el.querySelector('article') : null;
+    const article = nativeSelectionAlive() ? NativeNav.el.querySelector('article') : null;
     if (!article) {
       showActionToast(t('toastNoSelection'));
       return;
@@ -2581,13 +2581,54 @@
   // 経由でNativeNav.elを見るため）。実機報告を受けて、ツイート単体ページ
   // （常にメインの投稿が1件だけ）では最初から自動で選択しておく。他のページ
   // （複数の投稿が並ぶタイムライン等）では意図しない選択にならないよう対象外。
+  // URLの /{username}/status/{id} から投稿主を取り出す
+  function statusPageAuthor() {
+    const m = location.pathname.match(/^\/([^/]+)\/status\/\d+/);
+    return m ? m[1] : null;
+  }
+
+  // 【実機報告のバグ】投稿ページでQを押すと、まったく別の投稿の内容で
+  // 拡大表示が開くことがあった。原因は、SPA遷移の直後はXがまだ前のページの
+  // セルをDOMに残しており、それを掴んでしまっていたこと。waitFor()を
+  // 「条件が既に満たされていれば即座に返す」に最適化した結果、Xがリストを
+  // 差し替える前に確定してしまうようになった（速度改善の副作用）。
+  // 対策：URLの投稿主と一致するセルを優先して探し、見つからない場合だけ
+  // 先頭セルにフォールバックする。返信スレッドでは先頭セルが親投稿
+  // （別人）のことがあるので、この一致判定は本来の投稿を選ぶ意味でも正しい。
   async function autoFocusStatusPage() {
     if (!isStatusPage()) return;
     const token = Grid.navToken;
-    const cell = await waitFor(() => nativeCells()[0], 4000, 60);
+    const author = statusPageAuthor();
+    const matches = (cell) => {
+      if (!cell) return false;
+      if (!author) return true;
+      const link = cell.querySelector('[data-testid="User-Name"] a[href^="/"]');
+      const name = link ? link.getAttribute('href').split('/')[1] : null;
+      return !!name && name.toLowerCase() === author.toLowerCase();
+    };
+    let cell = await waitFor(() => {
+      const c = nativeCells()[0];
+      return matches(c) ? c : null;
+    }, 2500, 80);
+    if (!cell) cell = await waitFor(() => nativeCells()[0], 1500, 80);
     if (!cell || token !== Grid.navToken) return;
     if (!isStatusPage() || currentGridMode() || NativeNav.el) return;
+    if (!cell.isConnected) return;
     nativeSetSelection(cell);
+  }
+
+  // 選択中のセルがまだ生きているかを確かめる。Xはページ遷移や部分再描画で
+  // セルを差し替えるため、古い参照を掴んだまま操作すると「別の投稿に対して
+  // 実行される」「存在しない投稿が開く」といった事故になる。
+  function nativeSelectionAlive() {
+    const el = NativeNav.el;
+    if (!el) return null;
+    const pc = document.querySelector('[data-testid="primaryColumn"]');
+    if (!el.isConnected || !pc || !pc.contains(el)) {
+      nativeSetSelection(null);
+      return null;
+    }
+    return el;
   }
 
   function nativeSelectDelta(delta, cells) {
@@ -2599,7 +2640,7 @@
   }
 
   function nativeOpenSelected() {
-    if (!NativeNav.el) return;
+    if (!nativeSelectionAlive()) return;
     const entry = scrapeNativeEntry(NativeNav.el);
     if (!entry || entry.type !== 'photo' || entry.images.length === 0) return;
     if (entry.images.length > 1) {
@@ -2648,6 +2689,38 @@
     if (k === Settings.keys.retweet) {
       e.preventDefault();
       pressRetweet();
+      return;
+    }
+
+    // 【実機報告】投稿ページでFを押しても何も起きなかった。R/Fはグリッド用の
+    // ハンドラにしか実装しておらず、グリッド外（投稿ページ等）では未配線
+    // だったため。投稿ページではURLから投稿主が分かるので、そこへ飛ばす。
+    // タイムライン上でW/Sで選択している時は、その選択中の投稿の投稿主へ。
+    if (k === Settings.keys.openMedia) {
+      const author =
+        statusPageAuthor() ||
+        (nativeSelectionAlive() &&
+          (() => {
+            const a = NativeNav.el.querySelector('[data-testid="User-Name"] a[href^="/"]');
+            return a ? a.getAttribute('href').split('/')[1] : null;
+          })());
+      if (author) {
+        e.preventDefault();
+        xmrSpaNavigate(
+          Settings.fTarget === 'media' ? '/' + author + '/media?filter=photo' : '/' + author
+        );
+      }
+      return;
+    }
+    // Rは「その投稿を開く」。投稿ページでは既に開いているので何もしない。
+    if (k === Settings.keys.openTweet) {
+      if (isStatusPage()) return;
+      const el = nativeSelectionAlive();
+      if (!el) return;
+      const link = el.querySelector('a[href*="/status/"]');
+      if (!link) return;
+      e.preventDefault();
+      xmrSpaNavigate(link.getAttribute('href'));
       return;
     }
 
