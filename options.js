@@ -121,6 +121,7 @@ const tileActionsEl = document.getElementById('tileActions');
 const fTargetEl = document.getElementById('fTarget');
 const newPostsBannerEl = document.getElementById('newPostsBanner');
 const photoFirstEl = document.getElementById('photoFirst');
+const autoActionableEl = document.getElementById('autoActionable');
 const hideHomeDotEl = document.getElementById('hideHomeDot');
 const hideNotifBadgeEl = document.getElementById('hideNotifBadge');
 loadSettings((s) => {
@@ -129,11 +130,13 @@ loadSettings((s) => {
   fTargetEl.value = s.fTarget === 'media' ? 'media' : 'profile'; // デフォルトはプロフィール
   newPostsBannerEl.checked = s.newPostsBanner !== false; // デフォルトON
   photoFirstEl.checked = s.photoFirst !== false; // デフォルトON（画像側を優先して開く）
+  autoActionableEl.checked = s.autoActionable !== false; // デフォルトON
   hideHomeDotEl.checked = s.hideHomeDot === true; // デフォルトOFF（表示）
   hideNotifBadgeEl.checked = s.hideNotifBadge === true; // デフォルトOFF（表示）
 });
 newPostsBannerEl.addEventListener('change', () => saveSettings({ newPostsBanner: newPostsBannerEl.checked }));
 photoFirstEl.addEventListener('change', () => saveSettings({ photoFirst: photoFirstEl.checked }));
+autoActionableEl.addEventListener('change', () => saveSettings({ autoActionable: autoActionableEl.checked }));
 hideHomeDotEl.addEventListener('change', () => saveSettings({ hideHomeDot: hideHomeDotEl.checked }));
 hideNotifBadgeEl.addEventListener('change', () => saveSettings({ hideNotifBadge: hideNotifBadgeEl.checked }));
 fTargetEl.addEventListener('change', () => {

@@ -75,6 +75,8 @@
       "toastRepostRemoved": "リポストを解除しました",
       "toastDone": "実行しました",
       "scopeProfile": "ポスト",
+      "optAutoActionableLabel": "画像欄は操作できる表示で開く",
+      "optAutoActionableDesc": "初期値：オン。Xの「画像」タブにはいいね等のボタンが存在しないため、代わりに「ポスト」タブを画像だけに絞って開きます（開かずにいいねできます）。オフにするとXの新しい画像タブがそのまま出ます。オンのままでもタブバーの「画像」を押せばXの表示を見られます",
       "toolbarActionable": "操作できる表示",
       "toolbarActionableTitle": "Xの画像タブにはいいね等のボタンが存在しないため、操作できる一覧に切り替えます（ポストタブを画像だけに絞って表示）",
       "toastSearchUnsupported": "この一覧はXがボタンを描画しないため直接操作できません（$1キーで開けば操作できます）",
@@ -207,6 +209,8 @@
       "toastRepostRemoved": "Repost removed",
       "toastDone": "Done",
       "scopeProfile": "Posts",
+      "optAutoActionableLabel": "Open the images tab in a view you can act on",
+      "optAutoActionableDesc": "Default: on. X's images tab has no like/bookmark buttons, so this opens the posts tab filtered to images instead, where you can act without opening a post. Turn it off to get X's new images tab as-is; even with it on, the \"Images\" tab in the tab bar still takes you there.",
       "toolbarActionable": "Actionable view",
       "toolbarActionableTitle": "X's images tab has no like/bookmark buttons, so this switches to a view where you can act — the posts tab, filtered to images",
       "toastSearchUnsupported": "X doesn't render action buttons in this view (press $1 to open the post and act there)",
@@ -391,6 +395,10 @@
     seenColor: '', // ''=既定（テーマ別の青系）。#rrggbbで既読の帯色を変更
     newPostsBanner: true, // グリッド上の「新しいポストを表示」バナー
     photoFirst: true, // メディア欄を開いた時に画像側(?filter=photo)を優先する
+    // Xが2026-08に画像タブをいいねボタンの無い独自グリッドへ差し替えた
+    // ため、既定では操作できるポストタブ（画像のみ表示）へ寄せる。
+    // OFFにするとXの新しい画像タブがそのまま出る。
+    autoActionable: true,
     hideHomeDot: false, // ホームアイコンの青い未読ドットを隠す
     hideNotifBadge: false, // 通知アイコンの数字バッジを隠す
     keys: Object.assign({}, DEFAULT_KEYS),
@@ -439,6 +447,7 @@
     if (typeof saved.tileActions === 'boolean') Settings.tileActions = saved.tileActions;
     if (typeof saved.newPostsBanner === 'boolean') Settings.newPostsBanner = saved.newPostsBanner;
     if (typeof saved.photoFirst === 'boolean') Settings.photoFirst = saved.photoFirst;
+    if (typeof saved.autoActionable === 'boolean') Settings.autoActionable = saved.autoActionable;
     if (typeof saved.hideHomeDot === 'boolean') Settings.hideHomeDot = saved.hideHomeDot;
     if (typeof saved.hideNotifBadge === 'boolean') Settings.hideNotifBadge = saved.hideNotifBadge;
     applyNavBadgePrefs();
@@ -790,14 +799,32 @@
   function autoRedirectMediaPhoto() {
     // 設定でOFFにできる（初期値ON）。OFFの時はXの標準どおり、メディア欄を
     // 開くと動画側が表示される。ONだと画像側を優先して開く。
-    if (!Settings.photoFirst) return;
     const m = location.pathname.match(/^\/[^/]+\/media\/?$/);
     if (!m) return;
-    if (location.search) return; // 既にフィルタ指定済みなら尊重する
+    const filterParam = new URLSearchParams(location.search).get('filter');
     if (suppressNextPhotoRedirect) {
       suppressNextPhotoRedirect = false;
       return;
     }
+    // 【2026-08-22】Xの「画像」タブはいいね等のボタンを持たない独自グリッド
+    // に差し替えられ、そこでは構造上どうやっても操作できない。同じ投稿は
+    // プロフィールの「ポスト」タブ（従来構造・操作可能）に画像のみ表示を
+    // かければ、差し替え前とほぼ同じ形で見られる。既定ではそちらへ寄せる。
+    // 動画側(filter=video)は従来のままなので触らない。Xの新グリッドを見たい
+    // 時はタブバーの「画像」を押せば1回だけ抑制されて素通しになる。
+    if (Settings.autoActionable && filterParam !== 'video') {
+      const um = location.pathname.match(/^\/([^/]+)\/media\/?$/);
+      if (um) {
+        try {
+          setImageOnly('profile', true);
+        } catch (e) {}
+        history.replaceState(history.state, '', '/' + um[1]);
+        window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+        return;
+      }
+    }
+    if (!Settings.photoFirst) return;
+    if (location.search) return; // 既にフィルタ指定済みなら尊重する
     const newUrl = location.pathname.replace(/\/$/, '') + '?filter=photo';
     history.replaceState(history.state, '', newUrl);
     window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
@@ -4629,7 +4656,7 @@
         const btn = mkXTab(tb.text, active);
         btn.addEventListener('click', (e) => {
           e.preventDefault();
-          if (mode === 'media' && tb.isVideoPill) {
+          if ((mode === 'media' && tb.isVideoPill) || /^\/[^/]+\/media/.test(tb.href)) {
             // 「動画」（bareの/media）はautoRedirectMediaPhoto()に引き戻され
             // ないよう1回だけリダイレクトを抑制してからSPA遷移する
             suppressNextPhotoRedirect = true;
