@@ -342,6 +342,11 @@
     subGridCols: 2,          // 複数画像ツイートのサブグリッド列数
     gridGap: 4,
     initialFillCount: 30,    // グリッド表示開始時に先読みしておく件数
+    // プロフィールのポストタブは文字だけの投稿が大半のこともあり、画像タイルを
+    // 30枚集めるのに何十回もスクロールが要る（実機報告：自分のプロフィールを
+    // 開くと3秒ほど待たされる）。最初は1画面ぶんだけ埋めて、残りはスクロールに
+    // 追従して足す（maybePumpNearEnd）。
+    initialFillCountSparse: 12,
     pumpBatchCount: 24,      // スクロールで下に近づくたびに追加で狙う件数
     photoPendingMs: 4000,    // 画像がまだ描画されていないセルを「本当に画像なし」と確定するまで待つ時間
     pumpStepMinWaitMs: 100,  // pumpMoreのスクロール1回ごとの最低待ち（Xがセルをマウントする猶予。攻めすぎると取りこぼす）
@@ -965,16 +970,14 @@
       // 以前はf=mediaだけを対象にしていたため、「操作できない方だけを
       // グリッド化し、操作できる方は対象外」という逆の状態になっていた
       // （実機報告：検索から開くといいねができない）。両方を対象にする。
-      const sp = new URLSearchParams(location.search);
-      const f = sp.get('f');
-      if (f === 'media' || f === 'image') return true;
-      // f=live …「最新」。時系列順で、articleも操作ボタンも揃っている。
-      // ツールバーの「操作できる表示」が作るURLがこれ。ただし最新タブは
-      // 文字列検索でも使われる普通のタブなので、filter:imagesのように
-      // 画像を明示している検索だけを対象にする（普通の検索まで勝手に
-      // グリッド化して驚かせないため）。
-      if (f === 'live' && /filter:(images|media)/.test(sp.get('q') || '')) return true;
-      return false;
+      // 投稿が並ぶタブは全部対象にする（話題のポスト＝fなし／最新＝live／
+      // メディア＝media／画像＝image）。「アカウント」「リスト」は投稿の
+      // 一覧ではないので除く。当初は最新タブをfilter:imagesの検索だけに
+      // 絞っていたが、話題のポストでも画像グリッドにしたいという実機要望を
+      // 受けて統一した。グリッド化するかどうかは検索スコープの
+      // 「画像のみ表示」トグル次第なので、勝手に変わることはない。
+      const f = new URLSearchParams(location.search).get('f') || '';
+      return f === '' || f === 'live' || f === 'media' || f === 'image';
     } catch (e) {
       return false;
     }
@@ -3486,6 +3489,12 @@
   }
 
   // --- 裏のリストを自分でスクロールさせ、Xの無限読み込みを誘発する ---
+  // 最初の1回でどこまで埋めるか。画像だらけの一覧（メディア/いいね等）は
+  // 従来通り先読みし、画像が疎な一覧は1画面ぶんで切り上げる。
+  function initialFillCountFor(mode) {
+    return mode === 'profile' ? CONFIG.initialFillCountSparse : CONFIG.initialFillCount;
+  }
+
   async function pumpMore(targetCount) {
     if (Grid.pumping) return;
     // 【実機で確定した重要な制約】Xは「ユーザーが実際にタイムラインの一番上に
@@ -3675,7 +3684,7 @@
     // 見える）。pumpMore()で本文が揃った後、settleGridOrder()で並び順を
     // 1回だけ整えてから、もう一度paintSelection()を呼んで確実に一番上
     // （左上）へハイライトを持ってくる。
-    pumpMore(CONFIG.initialFillCount).then(() => {
+    pumpMore(initialFillCountFor(Grid.mode)).then(() => {
       // 実機報告：読み込み後、正しく左上から始まるのに数秒後にもう一度
       // 左上へリセットされる不具合があった。原因はここ：初期読み込み
       // (pumpMore)が完了するまでの数秒の間にユーザーが既にWASDで操作を
@@ -4506,7 +4515,24 @@
       // 押しても見た目が何も変わらない「死んだタブ」になる（実機報告：
       // 検索のメディアはボタンが押せない）。出さないのが正直な見せ方。
       if (mode === 'search' && Settings.autoActionable) {
-        extraTabs = extraTabs.filter((tb) => !/[?&]f=media(&|$)/.test(tb.href || ''));
+        extraTabs = extraTabs.map((tb) => {
+          if (!/[?&]f=media(&|$)/.test(tb.href || '')) return tb;
+          // 「メディア」はいいね等のボタンを持たない差し替え済みビュー。
+          // 一度はタブごと隠したが、実機報告「メディアが無い」の通りそれは
+          // 見せ方として誤りだった。タブは残し、行き先だけ操作できる同等の
+          // ビュー（最新＋filter:images）に差し替える。hrefがURLと完全一致
+          // するので、着地後もこのタブがアクティブ表示のままになる。
+          try {
+            const u = new URL(tb.href, location.origin);
+            const q = u.searchParams.get('q') || '';
+            if (!q) return tb;
+            u.searchParams.set('q', /filter:(images|media)/.test(q) ? q : q + ' filter:images');
+            u.searchParams.set('f', 'live');
+            return Object.assign({}, tb, { href: u.pathname + u.search });
+          } catch (e) {
+            return tb;
+          }
+        });
       }
       // ホームの「おすすめ／フォロー中／自分で作ったリスト」タブはURLを持たない
       // （実機確認：クリックしてもURLが変わらずaria-selectedだけが付け替わる）
@@ -5114,7 +5140,7 @@
     // WASD/A/D/Spaceでの操作と区別できないため（詳細はactivateGrid()内の
     // コメント参照）。
     if (!cacheFresh) {
-      pumpMore(CONFIG.initialFillCount).then(() => {
+      pumpMore(initialFillCountFor(mode)).then(() => {
         if (Grid.userHasNavigated) return;
         // マウスホイールで既に見ている人の位置を奪わない（上のコメント参照）
         if (Grid.userHasScrolled) {
@@ -5175,7 +5201,15 @@
     if (mode) {
       activateGrid(mode);
     } else {
+      // グリッドはタイルを集めるためウィンドウを数万px下へ動かしている。
+      // そのまま非グリッドのページ（検索の「アカウント」「リスト」など）へ
+      // 移ると、Xの素の一覧が途中まで飛ばされた状態で表示される
+      // （実機報告：めっちゃ下まで移動してる）。同じ/searchのままクエリだけ
+      // 変わる遷移ではXがスクロールを戻してくれないため、自分で先頭に戻す。
+      // 投稿ページはautoFocusStatusPage()が位置を扱うので触らない。
+      const wasGrid = Grid.active;
       deactivateGrid();
+      if (wasGrid && !/\/status\/\d+/.test(location.pathname)) window.scrollTo(0, 0);
       autoFocusStatusPage();
     }
   }
