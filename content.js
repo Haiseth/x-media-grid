@@ -870,14 +870,23 @@
     return location.pathname === '/home';
   }
 
-  // ワード検索結果の「メディア」タブ（/search?q=…&f=media）。
+  // ワード検索結果の画像系タブ（/search?q=…&f=media または f=image）。
   // 検索結果もイラスト探しの主要な入口なのにグリッド化の対象外だった、
   // という指摘を受けて追加。f=mediaの時だけ対象（話題のポスト/最新/
   // アカウント等の他タブは通常表示のまま）。
   function isSearchMediaPage() {
     if (location.pathname !== '/search') return false;
     try {
-      return new URLSearchParams(location.search).get('f') === 'media';
+      // 検索には性質の違う2つのタブがある（実機で構造を確認）：
+      //   f=media …「メディア」。articleが無く写真リンクだけが並ぶ特殊構造。
+      //             いいね等のボタンがDOMに存在しないため操作は構造上不可能
+      //   f=image …「画像」。通常のarticleセルで、いいねボタンも存在する。
+      //             ホームやメディア欄と同じように操作できる
+      // 以前はf=mediaだけを対象にしていたため、「操作できない方だけを
+      // グリッド化し、操作できる方は対象外」という逆の状態になっていた
+      // （実機報告：検索から開くといいねができない）。両方を対象にする。
+      const f = new URLSearchParams(location.search).get('f');
+      return f === 'media' || f === 'image';
     } catch (e) {
       return false;
     }
@@ -3173,7 +3182,11 @@
       // 残り続け、追加読み込み分が永遠にスキップされる。検索モードでは
       // xmrDoneを一切使わず、画像リンク単位のGrid.seen照合だけで重複排除
       // する（セル数は高々十数個なので毎回の全走査コストは無視できる）。
-      if (Grid.mode === 'search') {
+      // 検索モードでも、セルがarticleを持っているなら通常の収穫経路に回す。
+      // そちらならいいね等のボタンが揃っており、他のページと同じように
+      // 操作できる。URLではなく実際の構造で振り分けることで、Xがタブの
+      // 実装を変えても追随できる。
+      if (Grid.mode === 'search' && !c.querySelector('article')) {
         const links = c.querySelectorAll('a[href*="/status/"][href*="/photo/"]');
         if (links.length === 0) continue; // スケルトン行。次回また見る
         for (const a of links) {
@@ -3206,7 +3219,10 @@
       }
       // 確定済み（写真/テキストどちらかに分類し終えた）セルは毎回の走査から即スキップする。
       // 件数が増えるほど毎フレームの全走査コストが効いてくるため（ガクつきの原因）。
-      // ※検索モードは上の分岐で処理済み（xmrDoneは使わない）。
+      // ※検索モードのうち、articleを持たない特殊構造のセル（f=media）だけは
+      //   上の分岐で処理済み（あちらはセル要素が使い回されるためxmrDoneが
+      //   使えない）。articleを持つセル（f=image）はここから先の通常経路で
+      //   扱い、xmrDoneも普通に効く。
       if (c.dataset.xmrDone === '1') continue;
       const article = c.querySelector('article');
       if (!article) continue;
