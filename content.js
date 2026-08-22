@@ -803,6 +803,14 @@
   // 無しのbare /mediaへ移動したい。だがそのままだとこの自動リダイレクトが
   // 即座に?filter=photoへ引き戻してしまうため、直後の1回だけ抑制するフラグ。
   let suppressNextPhotoRedirect = false;
+  // 「ポストタブを見たい」と本人が押した直後の猶予時間。この間は画像表示への
+  // 自動転送を止め、それでも/ユーザー名/mediaへ連れて行かれた場合はポストへ
+  // 押し戻す。実機報告「画像からポストへ移動できない／返信を経由すると押せる
+  // が勝手に画像へ移動する」への対策。URLの遷移自体は正しく動くことを実測で
+  // 確認できたので、原因を1つに特定するのではなく「本人がポストを選んだ直後は
+  // 何があってもポストに留める」という形で押さえる。Fキーからメディアへ直行
+  // する機能は猶予外なので今まで通り効く。
+  let postsTabIntentUntil = 0;
   function autoRedirectMediaPhoto() {
     // 検索の「メディア」タブもプロフィールの画像タブと同じ差し替え構造で、
     // いいね等のボタンがDOMに存在しない。同じ検索語のまま「最新」に
@@ -826,6 +834,16 @@
     // 開くと動画側が表示される。ONだと画像側を優先して開く。
     const m = location.pathname.match(/^\/[^/]+\/media\/?$/);
     if (!m) return;
+    if (Date.now() < postsTabIntentUntil) {
+      // 本人はポストを見たいと言っている。ここへ来たのは本人の操作ではない
+      // ので、画像表示へ送らずポストへ戻す。
+      const back = location.pathname.match(/^\/([^/]+)\/media\/?$/);
+      if (back) {
+        history.replaceState(history.state, '', '/' + back[1]);
+        window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+      }
+      return;
+    }
     const filterParam = new URLSearchParams(location.search).get('filter');
     if (suppressNextPhotoRedirect) {
       suppressNextPhotoRedirect = false;
@@ -4829,6 +4847,10 @@
             // ないよう1回だけリダイレクトを抑制してからSPA遷移する
             suppressNextPhotoRedirect = true;
           }
+          // プロフィール直下（＝ポストタブ）を選んだら、その直後だけ画像表示
+          // への自動転送を止める。ポストと画像は別物であり、押した先を勝手に
+          // すり替えないという方針をここで担保する。
+          if (/^\/[^/]+\/?$/.test(normHref(tb.href))) postsTabIntentUntil = Date.now() + 4000;
           // クリックしたボタンにフォーカスが残ると、ブラウザ標準の枠線が
           // 付いたままになる。青い下線（アクティブ表示）と並ぶと「2つ選択
           // されている」ように見えるため外す（実機報告：どっち開いてるの？）。
