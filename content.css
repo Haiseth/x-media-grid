@@ -155,6 +155,7 @@ html.xmr-light {
 .xmr-toolbar button.xmr-tb-settings,
 .xmr-toolbar button.xmr-tb-filter-unread,
 .xmr-toolbar button.xmr-tb-actionable,
+.xmr-toolbar button.xmr-tb-filter-novideo,
 .xmr-toolbar button.xmr-tb-filter-video {
   color: rgb(231, 233, 234);
   text-decoration: none;
@@ -171,6 +172,7 @@ html.xmr-light {
 .xmr-toolbar button.xmr-tb-settings:hover,
 .xmr-toolbar button.xmr-tb-filter-unread:hover,
 .xmr-toolbar button.xmr-tb-actionable:hover,
+.xmr-toolbar button.xmr-tb-filter-novideo:hover,
 .xmr-toolbar button.xmr-tb-filter-video:hover {
   background: rgba(239, 243, 244, 0.16);
 }
@@ -485,6 +487,11 @@ html.xmr-light {
   display: none;
 }
 .xmr-cgrid.xmr-filter-video .xmr-tile:not(.xmr-tile-isvideo) {
+  display: none;
+}
+/* 「動画を隠す」。プロフィールのポストタブ由来のグリッドには動画投稿も
+   混ざるため、旧メディア欄の画像側と同じ見え方にしたい時に使う。 */
+.xmr-cgrid.xmr-filter-novideo .xmr-tile.xmr-tile-isvideo {
   display: none;
 }
 
@@ -956,6 +963,7 @@ html.xmr-light .xmr-toolbar button.xmr-tb-refresh,
 html.xmr-light .xmr-toolbar button.xmr-tb-settings,
 html.xmr-light .xmr-toolbar button.xmr-tb-filter-unread,
 html.xmr-light .xmr-toolbar button.xmr-tb-actionable,
+html.xmr-light .xmr-toolbar button.xmr-tb-filter-novideo,
 html.xmr-light .xmr-toolbar button.xmr-tb-filter-video,
 html.xmr-light .xmr-home-toggle.xmr-home-toggle-toolbar {
   background: rgba(15, 20, 25, 0.06);
@@ -966,6 +974,7 @@ html.xmr-light .xmr-toolbar button.xmr-tb-refresh:hover,
 html.xmr-light .xmr-toolbar button.xmr-tb-settings:hover,
 html.xmr-light .xmr-toolbar button.xmr-tb-filter-unread:hover,
 html.xmr-light .xmr-toolbar button.xmr-tb-actionable:hover,
+html.xmr-light .xmr-toolbar button.xmr-tb-filter-novideo:hover,
 html.xmr-light .xmr-toolbar button.xmr-tb-filter-video:hover,
 html.xmr-light .xmr-home-toggle.xmr-home-toggle-toolbar:hover {
   background: rgba(15, 20, 25, 0.14);

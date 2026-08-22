@@ -89,6 +89,7 @@
       "toastReplyOpenFailed": "リプライ画面を開けませんでした",
       "filterUnread": "未読のみ表示",
       "filterVideoOnly": "動画のみ表示",
+      "filterNoVideo": "動画を隠す",
       "noText": "(本文なし)",
       "refreshing": "更新中…",
       "loading": "読み込み中…",
@@ -223,6 +224,7 @@
       "toastReplyOpenFailed": "Could not open the reply composer",
       "filterUnread": "Unread only",
       "filterVideoOnly": "Videos only",
+      "filterNoVideo": "Hide videos",
       "noText": "(no text)",
       "refreshing": "Refreshing…",
       "loading": "Loading…",
@@ -887,6 +889,10 @@
     navToken: 0, // ページ遷移のたびに増やして、古い非同期処理を打ち切るためのトークン
     filterUnread: false, // 「未読のみ表示」トグル（永続化はせず、活性化のたびOFFから始まる）
     filterVideoOnly: false, // 「動画のみ表示」トグル（同上）
+    // 「動画を隠す」トグル。プロフィールのポストタブをグリッド化すると
+    // 動画投稿も混ざるため（Xの旧メディア欄の画像側には出なかった）、
+    // 実機報告を受けて追加した「動画のみ表示」の逆向きの絞り込み。
+    filterNoVideo: false,
     sidebarPeekOpen: false, // 検索ボタンで一時的にサイドバーを表示している間だけtrue（永続化しない）
     userHasNavigated: false, // WASD/A/D/Spaceで意図的に操作したらtrue（初回読み込み完了時の並び替えをスキップするかの判定に使う。マウススクロール追従では立てない）
     activatingMode: null, // activateGrid()が完了(Grid.active=true)するまでの間、要求中のmodeを保持（同じ目的の重複呼び出しを弾くため）
@@ -2192,7 +2198,7 @@
     const centerY = shellRect.top + shellRect.height / 2;
     let bestIdx = Grid.selIndex;
     let bestDist = Infinity;
-    const filterActive = Grid.filterUnread || Grid.filterVideoOnly;
+    const filterActive = Grid.filterUnread || Grid.filterVideoOnly || Grid.filterNoVideo;
     // 「未読のみ」「動画のみ」が有効な間はdisplay:noneで隙間なく詰めている
     // ため、配列インデックス(i % cols)と見た目の列がもう対応していない。
     // 最初はここで単純に「列を保つ判定自体をやめる」対応をしたが、それだと
@@ -2270,6 +2276,7 @@
       if (tweetId && loadSeenTweets().has(tweetId)) return true;
     }
     if (Grid.filterVideoOnly && !entry.isVideo) return true;
+    if (Grid.filterNoVideo && entry.isVideo) return true;
     return false;
   }
 
@@ -2326,6 +2333,11 @@
     if (videoBtn) {
       videoBtn.textContent = t('filterVideoOnly') + ': ' + (Grid.filterVideoOnly ? 'ON' : 'OFF');
       videoBtn.classList.toggle('xmr-tb-on', Grid.filterVideoOnly);
+    }
+    const noVideoBtn = Grid.shellEl.querySelector('.xmr-tb-filter-novideo');
+    if (noVideoBtn) {
+      noVideoBtn.textContent = t('filterNoVideo') + ': ' + (Grid.filterNoVideo ? 'ON' : 'OFF');
+      noVideoBtn.classList.toggle('xmr-tb-on', Grid.filterNoVideo);
     }
     updateActionableBtn();
   }
@@ -2453,7 +2465,7 @@
     // 見なす専用フラグに分離する。
     Grid.userHasNavigated = true;
     if (Grid.level === 'grid') {
-      if (Grid.filterUnread || Grid.filterVideoOnly) {
+      if (Grid.filterUnread || Grid.filterVideoOnly || Grid.filterNoVideo) {
         stepFiltered(delta);
       } else {
         // フィルタが無い時は今まで通りの配列インデックス計算のみ（一切変更なし）。
@@ -3607,6 +3619,7 @@
     Grid.pumping = false;
     Grid.filterUnread = false;
     Grid.filterVideoOnly = false;
+    Grid.filterNoVideo = false;
     Grid.sidebarPeekOpen = false;
     Grid.userHasNavigated = false;
     Grid.userHasScrolled = false;
@@ -4488,6 +4501,13 @@
           });
         }
       }
+      // 検索の「メディア」タブは、いいね等のボタンを持たない差し替え済みの
+      // ビュー。autoActionableがONだと開いた瞬間に操作できる表示へ戻すため、
+      // 押しても見た目が何も変わらない「死んだタブ」になる（実機報告：
+      // 検索のメディアはボタンが押せない）。出さないのが正直な見せ方。
+      if (mode === 'search' && Settings.autoActionable) {
+        extraTabs = extraTabs.filter((tb) => !/[?&]f=media(&|$)/.test(tb.href || ''));
+      }
       // ホームの「おすすめ／フォロー中／自分で作ったリスト」タブはURLを持たない
       // （実機確認：クリックしてもURLが変わらずaria-selectedだけが付け替わる）
       // ので、profileのextraTabsのようにhrefではリンクできない。実DOM要素への
@@ -4599,6 +4619,7 @@
       '<button type="button" class="xmr-tb-actionable" hidden title="' + t('toolbarActionableTitle') + '">' + t('toolbarActionable') + '</button>' +
       '<button type="button" class="xmr-tb-filter-unread">' + t('filterUnread') + ': OFF</button>' +
       '<button type="button" class="xmr-tb-filter-video">' + t('filterVideoOnly') + ': OFF</button>' +
+      '<button type="button" class="xmr-tb-filter-novideo">' + t('filterNoVideo') + ': OFF</button>' +
       '</div>' +
       '<div class="xmr-tb-group xmr-tb-group-config">' +
       '<label class="xmr-tb-cols">' + t('toolbarCols') + ' <input type="number" class="xmr-cols-input" min="1" max="10" step="1"></label>' +
@@ -4626,13 +4647,27 @@
     // グリッドになるだけで意味が無いため、メディア欄だけこのボタンを出さない。
     if (mode === 'media') {
       toolbar.querySelector('.xmr-tb-filter-video').remove();
+      toolbar.querySelector('.xmr-tb-filter-novideo').remove();
     } else {
-      toolbar.querySelector('.xmr-tb-filter-video').addEventListener('click', () => {
-        Grid.filterVideoOnly = !Grid.filterVideoOnly;
-        writeFilterSetting('xmr-filter-video', Grid.filterVideoOnly); // 場所ごとに永続化
+      // 「動画のみ表示」と「動画を隠す」は同時にONにすると必ず空になるので、
+      // 片方をONにしたらもう片方を落とす。
+      const applyVideoFilters = () => {
+        writeFilterSetting('xmr-filter-video', Grid.filterVideoOnly);
+        writeFilterSetting('xmr-filter-novideo', Grid.filterNoVideo);
         Grid.gridEl.classList.toggle('xmr-filter-video', Grid.filterVideoOnly);
+        Grid.gridEl.classList.toggle('xmr-filter-novideo', Grid.filterNoVideo);
         refreshFilterToggleLabels();
         ensureSelectionVisible();
+      };
+      toolbar.querySelector('.xmr-tb-filter-video').addEventListener('click', () => {
+        Grid.filterVideoOnly = !Grid.filterVideoOnly;
+        if (Grid.filterVideoOnly) Grid.filterNoVideo = false;
+        applyVideoFilters();
+      });
+      toolbar.querySelector('.xmr-tb-filter-novideo').addEventListener('click', () => {
+        Grid.filterNoVideo = !Grid.filterNoVideo;
+        if (Grid.filterNoVideo) Grid.filterVideoOnly = false;
+        applyVideoFilters();
       });
     }
     // 設定ページ(options.html)はbrave://extensionsの詳細からしか開けず
@@ -5001,8 +5036,10 @@
     // 動画のみ表示はメディア欄ではボタン自体が無いので復元しない。
     Grid.filterUnread = readFilterSetting('xmr-filter-unread');
     Grid.filterVideoOnly = mode !== 'media' && readFilterSetting('xmr-filter-video');
+    Grid.filterNoVideo = mode !== 'media' && !Grid.filterVideoOnly && readFilterSetting('xmr-filter-novideo');
     if (Grid.filterUnread) Grid.gridEl.classList.add('xmr-filter-unread');
     if (Grid.filterVideoOnly) Grid.gridEl.classList.add('xmr-filter-video');
+    if (Grid.filterNoVideo) Grid.gridEl.classList.add('xmr-filter-novideo');
     refreshFilterToggleLabels();
 
     if (cacheFresh) {
