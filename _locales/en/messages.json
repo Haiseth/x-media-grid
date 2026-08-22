@@ -134,7 +134,7 @@
     "message": "Done"
   },
   "toastSearchUnsupported": {
-    "message": "Actions can't be run directly from search results (press $KEY$ to open the tweet and act there)",
+    "message": "X doesn't render action buttons in this view, so act after opening the post (press $KEY$)",
     "placeholders": {
       "key": {
         "content": "$1",

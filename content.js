@@ -3186,7 +3186,16 @@
       // そちらならいいね等のボタンが揃っており、他のページと同じように
       // 操作できる。URLではなく実際の構造で振り分けることで、Xがタブの
       // 実装を変えても追随できる。
-      if (Grid.mode === 'search' && !c.querySelector('article')) {
+      // 【2026-08-22 Xのアップデート】プロフィールの「メディア」タブが
+      // 「画像」タブに変わり、その中身が<article>を持たないX独自の
+      // グリッド構造（検索のf=mediaと同一）に置き換わった。実測：
+      //   /media?filter=photo → cell 15 / article 0 / いいねボタン 0
+      //   /media?filter=video → cell  2 / article 2 / いいねボタン 2
+      // つまり画像ビューだけが差し替えられ、動画ビューは従来のまま。
+      // よって振り分けをモード(URL)ではなくセルの構造で行う。articleが
+      // 有れば通常経路（全データ・操作可能）、無ければ画像リンク経路。
+      // こうしておけばXが次にどのビューを差し替えても追随できる。
+      if (!c.querySelector('article')) {
         const links = c.querySelectorAll('a[href*="/status/"][href*="/photo/"]');
         if (links.length === 0) continue; // スケルトン行。次回また見る
         for (const a of links) {
@@ -3209,7 +3218,9 @@
               liked: false,
               bookmarked: false,
               retweeted: false,
-              searchItem: true, // 検索メディア由来（いいね等の直接操作は構造上不可）
+              // Xがボタンを描画しない一覧（検索f=media／プロフィール画像
+              // ビュー）由来。いいね等の直接操作は構造上不可能。
+              searchItem: true,
             },
             translateYOf(c)
           );
@@ -4131,11 +4142,16 @@
       // 行）で、しかも実機で「先頭の1〜2セルが中身の無いスペーサーのまま」
       // というケースを確認したため、先頭固定ではなく「内容を持つ最初の
       // セル」を探す。他のモードは従来通り先頭セル+article判定。
+      // 「内容を持つ最初のセル」を構造で探す。先頭セルを決め打ちすると、
+      // 中身の無いスペーサー・新着取り込みバー（どちらもarticleを持たない）
+      // が先頭に居座った時に永遠にスケルトン扱いとなり、「読み込み中…」が
+      // 終わらない。articleを持つセルを優先し、無ければ画像グリッド構造の
+      // セル（Xが2026-08に導入した画像ビュー／検索f=media）を受け入れる。
+      const cellsNow = [...document.querySelectorAll(cellSelector)];
       const candidate =
-        mode === 'search'
-          ? [...document.querySelectorAll(cellSelector)].find((c) => c.querySelector('a[href*="/photo/"]'))
-          : document.querySelector(cellSelector);
-      const hasContent = candidate && (mode === 'search' || candidate.querySelector('article'));
+        cellsNow.find((c) => c.querySelector('article')) ||
+        cellsNow.find((c) => c.querySelector('a[href*="/photo/"] img'));
+      const hasContent = !!candidate;
       if (!hasContent) {
         firstCell = null;
         continue; // まだ本文が無いスケルトン状態。先頭判定の対象にしない

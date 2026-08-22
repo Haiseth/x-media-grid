@@ -134,7 +134,7 @@
     "message": "実行しました"
   },
   "toastSearchUnsupported": {
-    "message": "検索結果の一覧からは直接実行できません（$KEY$キーでツイートを開いて操作できます）",
+    "message": "この一覧はXがボタンを描画しないため直接操作できません（$KEY$キーで開けば操作できます）",
     "placeholders": {
       "key": {
         "content": "$1",
