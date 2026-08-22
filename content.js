@@ -4357,7 +4357,12 @@
         const pcNow = document.querySelector('[data-testid="primaryColumn"]');
         const emptyMarker = pcNow && pcNow.querySelector('[data-testid="emptyState"]');
         const stillLoading = pcNow && pcNow.querySelector('[role="progressbar"]');
-        if (emptyMarker || (i >= 16 && cellsNow.length === 0 && !stillLoading)) {
+        // pcNowが在る＝ルートは描画済み。そこにセルが1つも無く読み込み表示も
+        // 無いなら、待っても何も来ない。以前は約2秒(i>=16)待っていたが、
+        // 実機報告「0ツイートのアカウントでメディアを押すとまだ3秒」を受けて
+        // 短縮する。ルート描画済みを条件に入れているので早すぎる誤判定は
+        // 起きない（描画前はpcNowがnullでこの分岐に入らない）。
+        if (emptyMarker || (pcNow && i >= 6 && cellsNow.length === 0 && !stillLoading)) {
           removeEarlyLoading();
           return;
         }
@@ -4814,6 +4819,11 @@
             // ないよう1回だけリダイレクトを抑制してからSPA遷移する
             suppressNextPhotoRedirect = true;
           }
+          // クリックしたボタンにフォーカスが残ると、ブラウザ標準の枠線が
+          // 付いたままになる。青い下線（アクティブ表示）と並ぶと「2つ選択
+          // されている」ように見えるため外す（実機報告：どっち開いてるの？）。
+          // キーボード操作でのフォーカス表示自体は他の要素で維持される。
+          btn.blur();
           xmrSpaNavigate(tb.href);
         });
         tabbarEl.appendChild(btn);
