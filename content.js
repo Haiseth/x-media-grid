@@ -954,7 +954,15 @@
   // ここを無条件にグリッド化すると本来のポスト一覧を見る場所が消える
   // （実機報告：人のアカウントに「ポスト」タブが無い／返信からポストを
   // 押すとメディアに飛ばされる）。画像表示には専用の印を付けて区別する。
-  const XMR_IMAGES_PARAM = 'xmrimg';
+  // 【実測で判明】Xはプロフィールのタブリンクを組み立てる時、現在のクエリ
+  // 文字列をそのまま引き継ぐ。目印をクエリ(?xmrimg=1)に置いていたため、
+  // 画像表示中はXの「ポスト」タブのhrefが/ユーザー名?xmrimg=1、つまり
+  // 「今いるURLそのもの」になっていた。押しても同じURLへの遷移なので何も
+  // 起きず、返信タブ経由だとパスが変わるので効くが、そこから戻る「ポスト」も
+  // ?xmrimg=1付き＝画像表示の目印付きなので画像へ行ってしまう。実機報告の
+  // 3症状はすべてこれ1つが原因だった。
+  // ハッシュはXのリンク組み立てに引き継がれないので、そちらへ移す。
+  const XMR_IMAGES_HASH = '#xmrimg';
 
   function profileNameFromPath() {
     const m = location.pathname.match(/^\/([^/]+)\/?$/);
@@ -963,11 +971,7 @@
   }
 
   function isProfileImagesMarked() {
-    try {
-      return new URLSearchParams(location.search).get(XMR_IMAGES_PARAM) === '1';
-    } catch (e) {
-      return false;
-    }
+    return location.hash === XMR_IMAGES_HASH;
   }
 
   // 「プロフィールの投稿を画像だけのグリッドで見る」ページ。印が付いている
@@ -977,7 +981,7 @@
   }
 
   function profileImagesPath(user) {
-    return '/' + user + '?' + XMR_IMAGES_PARAM + '=1';
+    return '/' + user + XMR_IMAGES_HASH;
   }
 
   function isLikesPage() {
@@ -4831,12 +4835,12 @@
       const normHref = (h) => {
         try {
           const u = new URL(h, location.origin);
-          return u.pathname.replace(/\/$/, '') + u.search;
+          return u.pathname.replace(/\/$/, '') + u.search + u.hash;
         } catch (e) {
           return h;
         }
       };
-      const hereHref = location.pathname.replace(/\/$/, '') + location.search;
+      const hereHref = location.pathname.replace(/\/$/, '') + location.search + location.hash;
       extraTabs.forEach((tb) => {
         const active = normHref(tb.href) === hereHref;
         const btn = mkXTab(tb.text, active);
