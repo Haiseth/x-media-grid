@@ -3523,8 +3523,17 @@
     // 丸ごと欠落し、いきなり12月の投稿まで飛んでいた）。「画像のみ表示を
     // OFFにして手でゆっくりスクロールしてからONにする」と正しく全部
     // 拾えていたことから、大ジャンプではなく1画面分ずつ進める方式に変更する。
+    // 「もう下が無い」を実測で見るための状態。停滞タイマー(4秒)だけが唯一の
+    // 停止条件だったため、投稿がほとんど無い／1件も無いタイムラインでは
+    // 「増えないまま満額の4秒を消費する」のが確定動作だった（実機報告：
+    // 何も投稿していない自分のプロフィールを開くと3秒ほど固まる）。
+    // スクロールしても位置が動かず、ページの高さも裏のリストも伸びない、が
+    // 2回続いたら本当に末尾なので即打ち切る。
+    let atBottomStreak = 0;
+    let lastDocHeight = document.documentElement.scrollHeight;
     for (let i = 0; i < 80 && Grid.entries.length < targetCount && Date.now() - lastGrowthAt < stagnantGiveUpMs; i++) {
       if (token !== Grid.navToken || !Grid.active || Grid.holdTop) break;
+      const yBefore = window.scrollY;
       window.scrollBy(0, Math.round(window.innerHeight * 0.8));
       // 実機報告「スクロール時のロードが0.3秒くらい遅い」への対応：以前は
       // ここで固定sleep(300)していたが、Xが既にデータを持っていて数十msで
@@ -3535,8 +3544,17 @@
       await waitForSourceGrowth(CONFIG.pumpStepMinWaitMs, CONFIG.pumpStepMaxWaitMs);
       if (token !== Grid.navToken || !Grid.active) break;
       harvestNew();
-      if (Grid.entries.length !== lastLen) lastGrowthAt = Date.now();
+      const grew = Grid.entries.length !== lastLen;
+      if (grew) lastGrowthAt = Date.now();
       lastLen = Grid.entries.length;
+      const docHeight = document.documentElement.scrollHeight;
+      const stuck = window.scrollY === yBefore && docHeight === lastDocHeight && !grew;
+      lastDocHeight = docHeight;
+      if (stuck) {
+        if (++atBottomStreak >= 2) break; // 末尾に到達。4秒待つ意味は無い
+      } else {
+        atBottomStreak = 0;
+      }
     }
     if (token === Grid.navToken) {
       Grid.pumping = false;
@@ -4305,6 +4323,20 @@
         cellsNow.find((c) => c.querySelector('a[href*="/photo/"] img'));
       const hasContent = !!candidate;
       if (!hasContent) {
+        // 投稿が1件も無いタイムライン（実機報告：何も投稿していない自分の
+        // プロフィールを開くと重い）。ここは「まだスケルトンだから待つ」と
+        // 決め打ちしていたため、中身が永遠に来ない空のページでは200回×120ms
+        // ＝最大24秒、ずっと「読み込み中…」を出したまま空回りしていた。
+        // 空だと判断できた時点でグリッドを諦め、Xの素の表示に戻す。
+        // 判定はXの空状態要素と、「セルが1つも無く読み込み中の表示も無い」
+        // 構造の両方で見る（片方の目印だけに頼るとXの変更で効かなくなる）。
+        const pcNow = document.querySelector('[data-testid="primaryColumn"]');
+        const emptyMarker = pcNow && pcNow.querySelector('[data-testid="emptyState"]');
+        const stillLoading = pcNow && pcNow.querySelector('[role="progressbar"]');
+        if (emptyMarker || (i >= 16 && cellsNow.length === 0 && !stillLoading)) {
+          removeEarlyLoading();
+          return;
+        }
         firstCell = null;
         continue; // まだ本文が無いスケルトン状態。先頭判定の対象にしない
       }
