@@ -843,7 +843,7 @@
         try {
           setImageOnly('profile', true);
         } catch (e) {}
-        history.replaceState(history.state, '', '/' + um[1]);
+        history.replaceState(history.state, '', profileImagesPath(um[1]));
         window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
         return;
       }
@@ -932,10 +932,34 @@
   // 揃っている（実測：cell 8 / article 8 / いいねボタン 8）。しかも検索と
   // 違って本物のタイムラインなので取りこぼしが無い。「画像のみ表示」を
   // 組み合わせれば、差し替え前のメディア欄とほぼ同じ体験を取り戻せる。
-  function isProfilePostsPage() {
+  // 画像グリッドである印。/ユーザー名 は「ポスト」タブそのものなので、
+  // ここを無条件にグリッド化すると本来のポスト一覧を見る場所が消える
+  // （実機報告：人のアカウントに「ポスト」タブが無い／返信からポストを
+  // 押すとメディアに飛ばされる）。画像表示には専用の印を付けて区別する。
+  const XMR_IMAGES_PARAM = 'xmrimg';
+
+  function profileNameFromPath() {
     const m = location.pathname.match(/^\/([^/]+)\/?$/);
-    if (!m) return false;
-    return !RESERVED_ROOTS.has(m[1].toLowerCase());
+    if (!m) return '';
+    return RESERVED_ROOTS.has(m[1].toLowerCase()) ? '' : m[1];
+  }
+
+  function isProfileImagesMarked() {
+    try {
+      return new URLSearchParams(location.search).get(XMR_IMAGES_PARAM) === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // 「プロフィールの投稿を画像だけのグリッドで見る」ページ。印が付いている
+  // 時だけ対象にするので、素の /ユーザー名 はXの普通のポスト一覧のまま。
+  function isProfilePostsPage() {
+    return !!profileNameFromPath() && isProfileImagesMarked();
+  }
+
+  function profileImagesPath(user) {
+    return '/' + user + '?' + XMR_IMAGES_PARAM + '=1';
   }
 
   function isLikesPage() {
@@ -2299,7 +2323,7 @@
       // 本物のタイムラインなので取りこぼしが無い。
       const m = location.pathname.match(/^\/([^/]+)\/media/);
       if (!m) return null;
-      return { path: '/' + m[1], scope: 'profile' };
+      return { path: profileImagesPath(m[1]), scope: 'profile' };
     }
     if (Grid.mode === 'search') {
       // 検索のメディアタブ(f=media)からは、同じ検索語のまま「最新」へ。
@@ -4514,13 +4538,6 @@
         extraTabs = extraTabs.filter((t) => !/^\/[^/]+\/media\/?(\?.*)?$/.test(t.href));
         const um = location.pathname.match(/^\/([^/]+)(?:\/media\/?)?$/);
         const user = um ? um[1] : '';
-        // profileモードでは自前の「画像」ピルの行き先が/USER自身になるため、
-        // Xの「ポスト」タブと完全な重複になる（同じhref＝両方がアクティブ表示に
-        // なる）。重複する方を落として「返信/リポスト/画像/動画」に整える。
-        // 全投稿を見たい時は左下の「画像のみ表示」をOFFにすればXの通常表示に戻る。
-        if (mode === 'profile' && user) {
-          extraTabs = extraTabs.filter((t) => t.href !== '/' + user);
-        }
         if (user) {
           // 「画像」の行き先は、操作できる表示（ポストタブの画像のみ）。
           // 実機報告「動画から画像に移るといいねできない方に飛ばされる」の
@@ -4528,7 +4545,7 @@
           // しかもクリック時にリダイレクト抑制まで掛けていたため、わざわざ
           // 操作不能なビューへ確実に着地していた。
           extraTabs.push({
-            href: Settings.autoActionable ? '/' + user : '/' + user + '/media?filter=photo',
+            href: Settings.autoActionable ? profileImagesPath(user) : '/' + user + '/media?filter=photo',
             text: t('pillPhotos'),
           });
           // isVideoPill: 動画側へ遷移する自前ピルの印。クリック時のリダイレクト
@@ -4788,7 +4805,7 @@
           ? location.search.indexOf('filter=photo') === -1 && /\/media\/?$/.test(location.pathname)
           : tb.href.indexOf('?') !== -1
             ? location.pathname + location.search === tb.href
-            : location.pathname === tb.href;
+            : location.pathname === tb.href && !isProfileImagesMarked();
         const btn = mkXTab(tb.text, active);
         btn.addEventListener('click', (e) => {
           e.preventDefault();
