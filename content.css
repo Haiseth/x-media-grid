@@ -154,6 +154,7 @@ html.xmr-light {
 .xmr-toolbar button.xmr-tb-refresh,
 .xmr-toolbar button.xmr-tb-settings,
 .xmr-toolbar button.xmr-tb-filter-unread,
+.xmr-toolbar button.xmr-tb-actionable,
 .xmr-toolbar button.xmr-tb-filter-video {
   color: rgb(231, 233, 234);
   text-decoration: none;
@@ -169,6 +170,7 @@ html.xmr-light {
 .xmr-toolbar button.xmr-tb-refresh:hover,
 .xmr-toolbar button.xmr-tb-settings:hover,
 .xmr-toolbar button.xmr-tb-filter-unread:hover,
+.xmr-toolbar button.xmr-tb-actionable:hover,
 .xmr-toolbar button.xmr-tb-filter-video:hover {
   background: rgba(239, 243, 244, 0.16);
 }
@@ -953,6 +955,7 @@ html.xmr-light .xmr-toolbar a,
 html.xmr-light .xmr-toolbar button.xmr-tb-refresh,
 html.xmr-light .xmr-toolbar button.xmr-tb-settings,
 html.xmr-light .xmr-toolbar button.xmr-tb-filter-unread,
+html.xmr-light .xmr-toolbar button.xmr-tb-actionable,
 html.xmr-light .xmr-toolbar button.xmr-tb-filter-video,
 html.xmr-light .xmr-home-toggle.xmr-home-toggle-toolbar {
   background: rgba(15, 20, 25, 0.06);
@@ -962,6 +965,7 @@ html.xmr-light .xmr-toolbar a:hover,
 html.xmr-light .xmr-toolbar button.xmr-tb-refresh:hover,
 html.xmr-light .xmr-toolbar button.xmr-tb-settings:hover,
 html.xmr-light .xmr-toolbar button.xmr-tb-filter-unread:hover,
+html.xmr-light .xmr-toolbar button.xmr-tb-actionable:hover,
 html.xmr-light .xmr-toolbar button.xmr-tb-filter-video:hover,
 html.xmr-light .xmr-home-toggle.xmr-home-toggle-toolbar:hover {
   background: rgba(15, 20, 25, 0.14);
@@ -1151,4 +1155,22 @@ html.xmr-hide-home-dot [data-testid="AppTabBar_Home_Link"] svg ~ div {
 }
 html.xmr-hide-notif-badge [data-testid="AppTabBar_Notifications_Link"] svg ~ div {
   display: none !important;
+}
+
+/* 「操作できる表示」ボタン。Xが2026-08に画像タブをいいねボタンの無い
+   独自グリッドへ差し替えたため、操作できる検索経由の一覧へ逃がすための
+   導線。普段は出ない特別な提案なのでアクセント色で少しだけ目立たせる
+   （既定のhidden属性はdisplayを指定しないことで効いている）。 */
+.xmr-toolbar button.xmr-tb-actionable {
+  background: rgb(var(--xmr-accent-rgb));
+  color: #fff;
+}
+.xmr-toolbar button.xmr-tb-actionable:hover {
+  filter: brightness(1.1);
+  background: rgb(var(--xmr-accent-rgb));
+}
+html.xmr-light .xmr-toolbar button.xmr-tb-actionable,
+html.xmr-light .xmr-toolbar button.xmr-tb-actionable:hover {
+  background: rgb(var(--xmr-accent-rgb));
+  color: #fff;
 }

@@ -74,7 +74,9 @@
       "toastReposted": "リポストしました",
       "toastRepostRemoved": "リポストを解除しました",
       "toastDone": "実行しました",
-      "toastSearchUnsupported": "検索結果の一覧からは直接実行できません（$1キーでツイートを開いて操作できます）",
+      "toolbarActionable": "操作できる表示",
+      "toolbarActionableTitle": "Xの画像タブはいいね等のボタンを持たないため、検索経由の一覧に切り替えます。開かずに操作できるようになりますが、検索なので古い投稿が拾えないことがあります",
+      "toastSearchUnsupported": "この一覧はXがボタンを描画しないため直接操作できません（$1キーで開けば操作できます）",
       "toastRelocateFailed": "元の投稿を再表示できませんでした（$1キーでツイートを開いて操作できます）",
       "toastNoSelection": "投稿が選択されていません",
       "toastActionButtonNotFound": "操作ボタンが見つかりませんでした",
@@ -203,7 +205,9 @@
       "toastReposted": "Reposted",
       "toastRepostRemoved": "Repost removed",
       "toastDone": "Done",
-      "toastSearchUnsupported": "Actions can't be run directly from search results (press $1 to open the tweet and act there)",
+      "toolbarActionable": "Actionable view",
+      "toolbarActionableTitle": "X's images tab has no like/bookmark buttons. This switches to a search-backed list where you can act without opening posts — but being a search, it may miss older posts",
+      "toastSearchUnsupported": "X doesn't render action buttons in this view (press $1 to open the post and act there)",
       "toastRelocateFailed": "Could not re-locate the original post (press $1 to open the tweet and act there)",
       "toastNoSelection": "No post is selected",
       "toastActionButtonNotFound": "Could not find the action button",
@@ -885,8 +889,16 @@
       // 以前はf=mediaだけを対象にしていたため、「操作できない方だけを
       // グリッド化し、操作できる方は対象外」という逆の状態になっていた
       // （実機報告：検索から開くといいねができない）。両方を対象にする。
-      const f = new URLSearchParams(location.search).get('f');
-      return f === 'media' || f === 'image';
+      const sp = new URLSearchParams(location.search);
+      const f = sp.get('f');
+      if (f === 'media' || f === 'image') return true;
+      // f=live …「最新」。時系列順で、articleも操作ボタンも揃っている。
+      // ツールバーの「操作できる表示」が作るURLがこれ。ただし最新タブは
+      // 文字列検索でも使われる普通のタブなので、filter:imagesのように
+      // 画像を明示している検索だけを対象にする（普通の検索まで勝手に
+      // グリッド化して驚かせないため）。
+      if (f === 'live' && /filter:(images|media)/.test(sp.get('q') || '')) return true;
+      return false;
     } catch (e) {
       return false;
     }
@@ -2185,6 +2197,40 @@
     return false;
   }
 
+  // 【2026-08-22】Xがプロフィールの画像タブ(/user/media)と検索のメディア
+  // タブを、<article>を持たない独自グリッドに置き換えた。その構造には
+  // いいね/ブックマーク等のボタンがそもそも存在しないため、拡張機能側で
+  // どう頑張っても「開かずに操作」ができない。
+  // 一方、同じ投稿群を検索(from:ユーザー filter:images)で開くと従来通り
+  // articleが並び、操作できることを実測で確認した（article 6/いいね 6）。
+  // そこへの逃げ道。ただし検索は取りこぼしや並びの違いがあり得るので、
+  // 自動では飛ばさずユーザーがボタンを押した時だけ切り替える。
+  function actionableSearchPath() {
+    if (Grid.mode === 'media') {
+      const m = location.pathname.match(/^\/([^/]+)\/media/);
+      if (!m) return null;
+      return '/search?q=' + encodeURIComponent('from:' + m[1] + ' filter:images') + '&f=live';
+    }
+    if (Grid.mode === 'search') {
+      const q = new URLSearchParams(location.search).get('q') || '';
+      if (!q) return null;
+      const q2 = /filter:(images|media)/.test(q) ? q : q + ' filter:images';
+      return '/search?q=' + encodeURIComponent(q2) + '&f=live';
+    }
+    return null;
+  }
+
+  // 操作不能なタイル（searchItem）が1枚でも入ったら切り替えボタンを出す。
+  // モードやURLではなく実際に収穫した中身で判定するので、Xがどのビューを
+  // 差し替えても、逆に元に戻しても、勝手に追随する。
+  function updateActionableBtn() {
+    if (!Grid.shellEl) return;
+    const btn = Grid.shellEl.querySelector('.xmr-tb-actionable');
+    if (!btn) return;
+    const need = Grid.entries.some((e) => e.searchItem) && !!actionableSearchPath();
+    btn.hidden = !need;
+  }
+
   function refreshFilterToggleLabels() {
     if (!Grid.shellEl) return;
     // ON/OFFは文字だけでなく色でも分かるようにする（実機フィードバック。
@@ -2199,6 +2245,7 @@
       videoBtn.textContent = t('filterVideoOnly') + ': ' + (Grid.filterVideoOnly ? 'ON' : 'OFF');
       videoBtn.classList.toggle('xmr-tb-on', Grid.filterVideoOnly);
     }
+    updateActionableBtn();
   }
 
   // フィルタをONにした瞬間、今の選択がちょうど非表示になったタイルの上に
@@ -3306,6 +3353,7 @@
       appendEntry(entry, translateYOf(c));
       added++;
     }
+    if (added) updateActionableBtn();
     return added;
   }
 
@@ -4438,6 +4486,10 @@
         ? ''
         : '<button type="button" class="xmr-tb-refresh">' + t('toolbarRefresh') + '</button>') +
       '<span class="xmr-tb-refresh-status"></span>' +
+      // Xの画像タブ（いいねボタンが存在しない独自グリッド）に居る時だけ
+      // 出す逃げ道。既定は非表示で、収穫結果に操作不能タイルが混ざった
+      // 時点でupdateActionableBtn()が表示に切り替える。
+      '<button type="button" class="xmr-tb-actionable" hidden title="' + t('toolbarActionableTitle') + '">' + t('toolbarActionable') + '</button>' +
       '<button type="button" class="xmr-tb-filter-unread">' + t('filterUnread') + ': OFF</button>' +
       '<button type="button" class="xmr-tb-filter-video">' + t('filterVideoOnly') + ': OFF</button>' +
       '</div>' +
@@ -4480,6 +4532,16 @@
     // 分かりにくいという指摘があったため、ここから直接開けるようにした。
     // openOptionsPage()はcontent scriptから直接呼べないのでbackground.js
     // にメッセージで依頼する。
+    toolbar.querySelector('.xmr-tb-actionable').addEventListener('click', () => {
+      const path = actionableSearchPath();
+      if (!path) return;
+      // 検索スコープの「画像のみ表示」がOFFだとグリッドにならず素の検索
+      // 結果が出てしまい、押した意味が伝わらない。切り替えと同時にONにする。
+      try {
+        setImageOnly('search', true);
+      } catch (e) {}
+      xmrSpaNavigate(path);
+    });
     toolbar.querySelector('.xmr-tb-settings').addEventListener('click', () => {
       try {
         chrome.runtime.sendMessage({ type: 'xmr-open-options' });
