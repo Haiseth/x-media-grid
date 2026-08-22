@@ -4803,14 +4803,24 @@
     if (extraTabs.length > 0) {
       tabbarEl = document.createElement('div');
       tabbarEl.className = 'xmr-tabbar';
+      // アクティブ判定は「今のURLと完全に一致するタブ」ひとつだけ、という
+      // 1本の規則にする。以前はピルの種類ごとに別々の判定（画像は
+      // ?filter=photoの有無、その他はパスだけ一致…）を並べていたため、
+      // 条件どうしが重なって複数のタブが同時に点灯し得た（実機報告：
+      // ポストと画像に青い枠線が2つ）。パスだけの比較をやめてクエリまで
+      // 含めて比べれば、/USER と /USER?xmrimg=1 は別物として扱われる。
+      // hrefの表記ゆれ（絶対URL・末尾スラッシュ）は正規化して吸収する。
+      const normHref = (h) => {
+        try {
+          const u = new URL(h, location.origin);
+          return u.pathname.replace(/\/$/, '') + u.search;
+        } catch (e) {
+          return h;
+        }
+      };
+      const hereHref = location.pathname.replace(/\/$/, '') + location.search;
       extraTabs.forEach((tb) => {
-        // アクティブ判定：画像ピル=?filter=photo付き、動画ピル=クエリ無し、
-        // その他はパス一致（hrefベース＝言語非依存）
-        const active = tb.isVideoPill
-          ? location.search.indexOf('filter=photo') === -1 && /\/media\/?$/.test(location.pathname)
-          : tb.href.indexOf('?') !== -1
-            ? location.pathname + location.search === tb.href
-            : location.pathname === tb.href && !isProfileImagesMarked();
+        const active = normHref(tb.href) === hereHref;
         const btn = mkXTab(tb.text, active);
         btn.addEventListener('click', (e) => {
           e.preventDefault();
@@ -4828,6 +4838,12 @@
         });
         tabbarEl.appendChild(btn);
       });
+      // 保険：規則を1本にしても、Xが同じhrefのタブを2つ出すような場合には
+      // 二重点灯があり得る。最後に1つだけ残す（自前のピルは後から足すので
+      // 具体的な方＝後ろが勝つ）。「今どれを見ているのか分からない」状態は
+      // 見た目の問題では済まないため、ここで必ず断ち切る。
+      const lit = [...tabbarEl.querySelectorAll('.xmr-xtab-active')];
+      lit.slice(0, -1).forEach((el) => el.classList.remove('xmr-xtab-active'));
     }
     // ホームのタブ切替。押すと本物のタブ要素へclick()を委譲するだけなので、
     // 「おすすめ」以外を押すとensureHomeTabObserver()が検知して自動で
