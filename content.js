@@ -74,8 +74,9 @@
       "toastReposted": "リポストしました",
       "toastRepostRemoved": "リポストを解除しました",
       "toastDone": "実行しました",
+      "scopeProfile": "ポスト",
       "toolbarActionable": "操作できる表示",
-      "toolbarActionableTitle": "Xの画像タブはいいね等のボタンを持たないため、検索経由の一覧に切り替えます。開かずに操作できるようになりますが、検索なので古い投稿が拾えないことがあります",
+      "toolbarActionableTitle": "Xの画像タブにはいいね等のボタンが存在しないため、操作できる一覧に切り替えます（ポストタブを画像だけに絞って表示）",
       "toastSearchUnsupported": "この一覧はXがボタンを描画しないため直接操作できません（$1キーで開けば操作できます）",
       "toastRelocateFailed": "元の投稿を再表示できませんでした（$1キーでツイートを開いて操作できます）",
       "toastNoSelection": "投稿が選択されていません",
@@ -205,8 +206,9 @@
       "toastReposted": "Reposted",
       "toastRepostRemoved": "Repost removed",
       "toastDone": "Done",
+      "scopeProfile": "Posts",
       "toolbarActionable": "Actionable view",
-      "toolbarActionableTitle": "X's images tab has no like/bookmark buttons. This switches to a search-backed list where you can act without opening posts — but being a search, it may miss older posts",
+      "toolbarActionableTitle": "X's images tab has no like/bookmark buttons, so this switches to a view where you can act — the posts tab, filtered to images",
       "toastSearchUnsupported": "X doesn't render action buttons in this view (press $1 to open the post and act there)",
       "toastRelocateFailed": "Could not re-locate the original post (press $1 to open the tweet and act there)",
       "toastNoSelection": "No post is selected",
@@ -857,6 +859,29 @@
     return /^\/[^/]+\/media\/?$/.test(location.pathname);
   }
 
+  // Xが予約している1階層目のパス。ここに載っているものはアカウント名では
+  // ないので、プロフィールの「ポスト」タブと誤認しないよう除外する。
+  const RESERVED_ROOTS = new Set([
+    'home', 'explore', 'search', 'notifications', 'messages', 'settings',
+    'compose', 'i', 'intent', 'hashtag', 'login', 'logout', 'signup', 'tos',
+    'privacy', 'about', 'download', 'jobs', 'bookmarks', 'lists', 'topics',
+    'account', 'personalization', 'share', 'status', 'follower_requests',
+    'connect_people', 'notifications_timeline',
+  ]);
+
+  // プロフィールの「ポスト」タブ（/ユーザー名）。
+  // 【なぜ対象に加えたか】Xが2026-08にプロフィールの画像タブを、いいね等の
+  // ボタンを持たない独自グリッドへ差し替えた。そこでは構造上どうやっても
+  // 操作できないが、このポストタブは従来通りarticleが並び、いいねボタンも
+  // 揃っている（実測：cell 8 / article 8 / いいねボタン 8）。しかも検索と
+  // 違って本物のタイムラインなので取りこぼしが無い。「画像のみ表示」を
+  // 組み合わせれば、差し替え前のメディア欄とほぼ同じ体験を取り戻せる。
+  function isProfilePostsPage() {
+    const m = location.pathname.match(/^\/([^/]+)\/?$/);
+    if (!m) return false;
+    return !RESERVED_ROOTS.has(m[1].toLowerCase());
+  }
+
   function isLikesPage() {
     return /^\/i\/history\/likes\/?$/.test(location.pathname);
   }
@@ -1029,6 +1054,7 @@
     if (isLikesPage()) return 'likes';
     if (isPhotoMediaPage()) return 'media';
     if (isSearchMediaPage()) return 'search';
+    if (isProfilePostsPage()) return 'profile';
     return null;
   }
 
@@ -1047,6 +1073,10 @@
     // likes特有の処理（テキストのみ投稿もタイル化）を一切踏まない、
     // 素のグリッドとして動く。
     if (isSearchMediaPage()) return getImageOnly('search') ? 'search' : null;
+    // プロフィールのポストタブ。既定はOFF（プロフィールを開くたびに勝手に
+    // グリッドになると驚くため）。ツールバーの「操作できる表示」を押した
+    // 時だけONにして飛ばす。
+    if (isProfilePostsPage()) return getImageOnly('profile') ? 'profile' : null;
     return null;
   }
 
@@ -1142,6 +1172,7 @@
     else if (scope === 'media') name = t('scopeMedia');
     else if (scope === 'likes') name = t('scopeLikes');
     else if (scope === 'search') name = t('scopeSearch');
+    else if (scope === 'profile') name = t('scopeProfile');
     // タブ名がまだ取れない場合（currentHomeTabTextが空を返す）は、括弧ごと
     // 省いて「画像のみ表示: ON」と出す。中途半端な言語の混在を避けるため。
     const base = name ? t('imageOnlyLabel', [name]) : t('imageOnlyLabelPlain');
@@ -2205,17 +2236,23 @@
   // articleが並び、操作できることを実測で確認した（article 6/いいね 6）。
   // そこへの逃げ道。ただし検索は取りこぼしや並びの違いがあり得るので、
   // 自動では飛ばさずユーザーがボタンを押した時だけ切り替える。
-  function actionableSearchPath() {
+  function actionableViewPath() {
     if (Grid.mode === 'media') {
+      // プロフィールのポストタブへ。検索(from:ユーザー filter:images)も
+      // 操作可能だが、実測でメディア欄27件に対し検索は4件しか返さない
+      // ケースがあり、取りこぼしを黙って起こす危険がある。ポストタブなら
+      // 本物のタイムラインなので取りこぼしが無い。
       const m = location.pathname.match(/^\/([^/]+)\/media/);
       if (!m) return null;
-      return '/search?q=' + encodeURIComponent('from:' + m[1] + ' filter:images') + '&f=live';
+      return { path: '/' + m[1], scope: 'profile' };
     }
     if (Grid.mode === 'search') {
+      // 検索のメディアタブ(f=media)からは、同じ検索語のまま「最新」へ。
+      // こちらは元々検索なので、検索の範囲が変わらない移動に留める。
       const q = new URLSearchParams(location.search).get('q') || '';
       if (!q) return null;
       const q2 = /filter:(images|media)/.test(q) ? q : q + ' filter:images';
-      return '/search?q=' + encodeURIComponent(q2) + '&f=live';
+      return { path: '/search?q=' + encodeURIComponent(q2) + '&f=live', scope: 'search' };
     }
     return null;
   }
@@ -2227,7 +2264,7 @@
     if (!Grid.shellEl) return;
     const btn = Grid.shellEl.querySelector('.xmr-tb-actionable');
     if (!btn) return;
-    const need = Grid.entries.some((e) => e.searchItem) && !!actionableSearchPath();
+    const need = Grid.entries.some((e) => e.searchItem) && !!actionableViewPath();
     btn.hidden = !need;
   }
 
@@ -4253,7 +4290,7 @@
     // 使えればそちらを優先し（Xの比較的安定した目印）、無ければ従来の
     // 「@から始まるspanを探す」ヒューリスティックにフォールバックする。
     let profileCard = null;
-    if (mode === 'media' && primaryForTablist) {
+    if ((mode === 'media' || mode === 'profile') && primaryForTablist) {
       const avatarImg = [...primaryForTablist.querySelectorAll('img')].find(
         (img) => img.src.includes('profile_images') && !sourceRoot.contains(img)
       );
@@ -4533,14 +4570,14 @@
     // openOptionsPage()はcontent scriptから直接呼べないのでbackground.js
     // にメッセージで依頼する。
     toolbar.querySelector('.xmr-tb-actionable').addEventListener('click', () => {
-      const path = actionableSearchPath();
-      if (!path) return;
-      // 検索スコープの「画像のみ表示」がOFFだとグリッドにならず素の検索
-      // 結果が出てしまい、押した意味が伝わらない。切り替えと同時にONにする。
+      const target = actionableViewPath();
+      if (!target) return;
+      // 行き先の「画像のみ表示」がOFFだとグリッドにならず素のページが出て
+      // しまい、押した意味が伝わらない。切り替えと同時にONにする。
       try {
-        setImageOnly('search', true);
+        setImageOnly(target.scope, true);
       } catch (e) {}
-      xmrSpaNavigate(path);
+      xmrSpaNavigate(target.path);
     });
     toolbar.querySelector('.xmr-tb-settings').addEventListener('click', () => {
       try {
