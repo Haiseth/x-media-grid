@@ -1183,3 +1183,12 @@ html.xmr-light .xmr-toolbar button.xmr-tb-actionable:hover {
   background: rgb(var(--xmr-accent-rgb));
   color: #fff;
 }
+
+/* WASD/矢印で選択中（青枠）のタイルにも操作ボタンを出す。ホバー時と同じ
+   見せ方に揃える。設定(actionsOnFocus)がONの間だけルート要素にクラスが
+   付く。タイル操作ボタン自体をオフにしている時は上の
+   html.xmr-tile-actions-off が!importantで勝つので出ない。 */
+html.xmr-actions-on-focus .xmr-tile.xmr-selected .xmr-tile-actions {
+  opacity: 1;
+  transition: opacity 120ms;
+}

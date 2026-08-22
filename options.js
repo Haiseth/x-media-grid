@@ -118,6 +118,7 @@ function saveSettings(partial) {
 
 const hideSidebarEl = document.getElementById('hideSidebar');
 const tileActionsEl = document.getElementById('tileActions');
+const actionsOnFocusEl = document.getElementById('actionsOnFocus');
 const fTargetEl = document.getElementById('fTarget');
 const newPostsBannerEl = document.getElementById('newPostsBanner');
 const photoFirstEl = document.getElementById('photoFirst');
@@ -127,6 +128,7 @@ const hideNotifBadgeEl = document.getElementById('hideNotifBadge');
 loadSettings((s) => {
   hideSidebarEl.checked = s.hideSidebar === true; // デフォルトOFF（サイドバーは隠さない）
   tileActionsEl.checked = s.tileActions !== false; // デフォルトON（ホバーで操作ボタンを出す）
+  actionsOnFocusEl.checked = s.actionsOnFocus !== false; // デフォルトON
   fTargetEl.value = s.fTarget === 'media' ? 'media' : 'profile'; // デフォルトはプロフィール
   newPostsBannerEl.checked = s.newPostsBanner !== false; // デフォルトON
   photoFirstEl.checked = s.photoFirst !== false; // デフォルトON（画像側を優先して開く）
@@ -173,6 +175,9 @@ hideSidebarEl.addEventListener('change', () => {
 });
 tileActionsEl.addEventListener('change', () => {
   saveSettings({ tileActions: tileActionsEl.checked });
+});
+actionsOnFocusEl.addEventListener('change', () => {
+  saveSettings({ actionsOnFocus: actionsOnFocusEl.checked });
 });
 
 // ---- キー割り当て ----

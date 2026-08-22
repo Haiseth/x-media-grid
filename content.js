@@ -109,6 +109,8 @@
       "optHideSidebarLabel": "グリッド表示中は右サイドバーを隠す",
       "optHideSidebarDesc1": "初期値：オフ（サイドバーはそのまま表示）。",
       "optHideSidebarDesc2": "オン：サイドバーを隠して横幅をグリッドに使う。代わりにツールバーに「検索」ボタンが出て、押すと検索の時だけ一時的にサイドバーを表示します。",
+      "optActionsOnFocusLabel": "選択中（青枠）のタイルにも操作ボタンを表示",
+      "optActionsOnFocusDesc": "初期値：オン。WASDや矢印で選んでいるタイルに、マウスを乗せた時と同じボタンを出します。キーボードで見て回る時に、今どれを選んでいて何ができるのかが分かりやすくなります",
       "optTileActionsLabel": "タイルにマウスを乗せた時に操作ボタンを表示",
       "optTileActionsDesc": "初期値：オン。グリッドの各画像の右上に「♥ / 🔖 / 💬」（いいね・ブックマーク・リプライ）のボタンが出ます。キー操作派で不要ならオフに。",
       "optSaved": "保存しました",
@@ -244,6 +246,8 @@
       "optHideSidebarLabel": "Hide the right sidebar while the grid is shown",
       "optHideSidebarDesc1": "Default: off (the sidebar stays visible).",
       "optHideSidebarDesc2": "On: hides the sidebar so the grid can use the extra width. A \"Search\" button appears in the toolbar instead; pressing it shows the sidebar temporarily, just for searching.",
+      "optActionsOnFocusLabel": "Show action buttons on the selected tile too",
+      "optActionsOnFocusDesc": "Default: on. The tile you are on with WASD or the arrow keys shows the same buttons as hovering, so it is clear what you are about to act on.",
       "optTileActionsLabel": "Show action buttons when hovering over a tile",
       "optTileActionsDesc": "Default: on. \"♥ / 🔖 / 💬\" buttons (like, bookmark, reply) appear at the top right of each image in the grid. Turn this off if you prefer keyboard-only use.",
       "optSaved": "Saved",
@@ -397,6 +401,10 @@
   const Settings = {
     hideSidebar: false,
     tileActions: true,
+    // WASD/矢印で選択（青枠）したタイルにも、ホバーと同じ操作ボタンを出す。
+    // キーボードで見て回る人にとっては、今どれに何ができるのかが選択中の
+    // タイルに出ていた方が分かりやすい、という実機要望。初期値ON。
+    actionsOnFocus: true,
     fTarget: 'profile',
     accentColor: '', // ''=既定（Xブランド青）。#rrggbbでアクセント色を一括変更
     seenColor: '', // ''=既定（テーマ別の青系）。#rrggbbで既読の帯色を変更
@@ -446,12 +454,14 @@
     // 切り替えるだけ（既存タイル・今後作るタイルの両方へ即時反映される）。
     if (document.documentElement) {
       document.documentElement.classList.toggle('xmr-tile-actions-off', !Settings.tileActions);
+      document.documentElement.classList.toggle('xmr-actions-on-focus', !!Settings.actionsOnFocus);
     }
   }
   function applySavedSettings(saved) {
     if (!saved) return;
     if (typeof saved.hideSidebar === 'boolean') Settings.hideSidebar = saved.hideSidebar;
     if (typeof saved.tileActions === 'boolean') Settings.tileActions = saved.tileActions;
+    if (typeof saved.actionsOnFocus === 'boolean') Settings.actionsOnFocus = saved.actionsOnFocus;
     if (typeof saved.newPostsBanner === 'boolean') Settings.newPostsBanner = saved.newPostsBanner;
     if (typeof saved.photoFirst === 'boolean') Settings.photoFirst = saved.photoFirst;
     if (typeof saved.autoActionable === 'boolean') Settings.autoActionable = saved.autoActionable;
@@ -4348,6 +4358,8 @@
     // 660msにしたwaitForの件と全く同じ構図）。判定を先に行い、待つのは
     // 「まだ整っていない時だけ」にする。刻みも300ms→120msに細かくして、
     // 整った瞬間に抜けられるようにする（総待ち時間の上限はほぼ同じ）。
+    // 「中身が来ない」状態が続いた回数。1周120msなので回数がそのまま時間。
+    let barrenStreak = 0;
     for (let i = 0; i < 200; i++) {
       if (i > 0) await sleep(120);
       if (token !== Grid.navToken || currentGridMode() !== mode) {
@@ -4369,22 +4381,21 @@
         cellsNow.find((c) => c.querySelector('a[href*="/photo/"] img'));
       const hasContent = !!candidate;
       if (!hasContent) {
-        // 投稿が1件も無いタイムライン（実機報告：何も投稿していない自分の
-        // プロフィールを開くと重い）。ここは「まだスケルトンだから待つ」と
-        // 決め打ちしていたため、中身が永遠に来ない空のページでは200回×120ms
-        // ＝最大24秒、ずっと「読み込み中…」を出したまま空回りしていた。
-        // 空だと判断できた時点でグリッドを諦め、Xの素の表示に戻す。
-        // 判定はXの空状態要素と、「セルが1つも無く読み込み中の表示も無い」
-        // 構造の両方で見る（片方の目印だけに頼るとXの変更で効かなくなる）。
+        // 【実測】1件も投稿していないアカウントでXが描くのは「おすすめユーザー」
+        // のモジュール（7セル）で、投稿は0件。しかもemptyStateという目印は
+        // 出さない。前版の「セルが0個」「emptyStateが在る」という判定はどちらも
+        // 成立せず、200回×120ms＝最大24秒の待ちループを走り切っていた（実機
+        // 報告：自分のプロフィールでメディアを開くと固まってからポストに戻る）。
+        // 見るべきは数でも専用の目印でもなく「投稿のセルが1つも無い」こと。
         const pcNow = document.querySelector('[data-testid="primaryColumn"]');
-        const emptyMarker = pcNow && pcNow.querySelector('[data-testid="emptyState"]');
         const stillLoading = pcNow && pcNow.querySelector('[role="progressbar"]');
-        // pcNowが在る＝ルートは描画済み。そこにセルが1つも無く読み込み表示も
-        // 無いなら、待っても何も来ない。以前は約2秒(i>=16)待っていたが、
-        // 実機報告「0ツイートのアカウントでメディアを押すとまだ3秒」を受けて
-        // 短縮する。ルート描画済みを条件に入れているので早すぎる誤判定は
-        // 起きない（描画前はpcNowがnullでこの分岐に入らない）。
-        if (emptyMarker || (pcNow && i >= 6 && cellsNow.length === 0 && !stillLoading)) {
+        if (pcNow && !stillLoading) barrenStreak++;
+        else barrenStreak = 0;
+        // おすすめユーザーが出ている＝Xは既に「見せる投稿が無い」と判断して
+        // いる。読み込み途中のスケルトンとはっきり区別できるので早く抜ける。
+        // それ以外は、単に読み込みが遅いだけの可能性を見て約2秒待つ。
+        const hasUserModule = cellsNow.some((c) => c.querySelector('[data-testid="UserCell"]'));
+        if ((hasUserModule && barrenStreak >= 2) || barrenStreak >= 16) {
           removeEarlyLoading();
           return;
         }
