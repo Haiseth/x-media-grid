@@ -797,6 +797,24 @@
   // 即座に?filter=photoへ引き戻してしまうため、直後の1回だけ抑制するフラグ。
   let suppressNextPhotoRedirect = false;
   function autoRedirectMediaPhoto() {
+    // 検索の「メディア」タブもプロフィールの画像タブと同じ差し替え構造で、
+    // いいね等のボタンがDOMに存在しない。同じ検索語のまま「最新」に
+    // filter:imagesを足した形へ寄せると、articleが並んで操作できる
+    // （実測：article 4 / いいねボタン 4）。プロフィール側と挙動を揃える。
+    if (Settings.autoActionable && location.pathname === '/search' && !suppressNextPhotoRedirect) {
+      const sp = new URLSearchParams(location.search);
+      const q = sp.get('q') || '';
+      if (sp.get('f') === 'media' && q) {
+        sp.set('q', /filter:(images|media)/.test(q) ? q : q + ' filter:images');
+        sp.set('f', 'live');
+        try {
+          setImageOnly('search', true);
+        } catch (e) {}
+        history.replaceState(history.state, '', '/search?' + sp.toString());
+        window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+        return;
+      }
+    }
     // 設定でOFFにできる（初期値ON）。OFFの時はXの標準どおり、メディア欄を
     // 開くと動画側が表示される。ONだと画像側を優先して開く。
     const m = location.pathname.match(/^\/[^/]+\/media\/?$/);
@@ -4431,18 +4449,43 @@
       // 一方しかタブに出ない）。実機報告「画像と動画を両方常にクリック
       // できるようにしてほしい」を受けて、このタブ枠だけ拾わず、
       // 「画像」「動画」の2つを自分で組み立てて差し替える。
-      if (mode === 'media') {
+      // プロフィールのポストタブをグリッド化している時(mode==='profile')も
+      // 同じピルを出す。ここを媒体modeだけにしていたため、実機報告
+      // 「動画が無いし画像が『メディア』という名前になっている」が出た
+      // （Xが/USER上で出すのは「メディア」1枚だけで、画像/動画に割れるのは
+      // メディア配下に入ってから）。
+      if (mode === 'media' || mode === 'profile') {
         // Xの可変メディアタブの除外も文言("画像"/"動画")ではなくhrefで判定
         // （英語UIの"Photos"/"Videos"も正しく除外されるように）。
         extraTabs = extraTabs.filter((t) => !/^\/[^/]+\/media\/?(\?.*)?$/.test(t.href));
-        const um = location.pathname.match(/^\/([^/]+)\/media\/?$/);
+        const um = location.pathname.match(/^\/([^/]+)(?:\/media\/?)?$/);
         const user = um ? um[1] : '';
+        // profileモードでは自前の「画像」ピルの行き先が/USER自身になるため、
+        // Xの「ポスト」タブと完全な重複になる（同じhref＝両方がアクティブ表示に
+        // なる）。重複する方を落として「返信/リポスト/画像/動画」に整える。
+        // 全投稿を見たい時は左下の「画像のみ表示」をOFFにすればXの通常表示に戻る。
+        if (mode === 'profile' && user) {
+          extraTabs = extraTabs.filter((t) => t.href !== '/' + user);
+        }
         if (user) {
-          extraTabs.push({ href: '/' + user + '/media?filter=photo', text: t('pillPhotos') });
-          // isVideoPill: bare /media（動画側）へ遷移する自前ピルの印。
-          // クリック時の?filter=photoリダイレクト抑止の判定に、表示文言
-          // ではなくこのフラグを使う（i18n化しても壊れないように）。
-          extraTabs.push({ href: '/' + user + '/media', text: t('pillVideos'), isVideoPill: true });
+          // 「画像」の行き先は、操作できる表示（ポストタブの画像のみ）。
+          // 実機報告「動画から画像に移るといいねできない方に飛ばされる」の
+          // 修正：以前はここがXの画像タブ(?filter=photo)を直接指しており、
+          // しかもクリック時にリダイレクト抑制まで掛けていたため、わざわざ
+          // 操作不能なビューへ確実に着地していた。
+          extraTabs.push({
+            href: Settings.autoActionable ? '/' + user : '/' + user + '/media?filter=photo',
+            text: t('pillPhotos'),
+          });
+          // isVideoPill: 動画側へ遷移する自前ピルの印。クリック時のリダイレクト
+          // 抑止の判定に、表示文言ではなくこのフラグを使う（i18n化しても
+          // 壊れないように）。行き先はXの現在の動画タブと同じ?filter=video
+          // （かつてのbare /media＝動画という規約はXの更新で無くなった）。
+          extraTabs.push({
+            href: '/' + user + '/media?filter=video',
+            text: t('pillVideos'),
+            isVideoPill: true,
+          });
         }
       }
       // ホームの「おすすめ／フォロー中／自分で作ったリスト」タブはURLを持たない
@@ -4656,7 +4699,7 @@
         const btn = mkXTab(tb.text, active);
         btn.addEventListener('click', (e) => {
           e.preventDefault();
-          if ((mode === 'media' && tb.isVideoPill) || /^\/[^/]+\/media/.test(tb.href)) {
+          if (mode !== 'home' && tb.isVideoPill) {
             // 「動画」（bareの/media）はautoRedirectMediaPhoto()に引き戻され
             // ないよう1回だけリダイレクトを抑制してからSPA遷移する
             suppressNextPhotoRedirect = true;
