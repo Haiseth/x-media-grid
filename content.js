@@ -4397,6 +4397,17 @@
         const hasUserModule = cellsNow.some((c) => c.querySelector('[data-testid="UserCell"]'));
         if ((hasUserModule && barrenStreak >= 2) || barrenStreak >= 16) {
           removeEarlyLoading();
+          // 画像表示の目印付きURL(/ユーザー名#xmrimg)は「メディアを押した」
+          // 結果ここに居るということ。グリッドを組めないからといって素の
+          // ポスト一覧に落とすと、押した場所と着いた場所が食い違う
+          // （実機報告：自分のプロフィールでメディアを押すとポストに戻る）。
+          // 自前で見せられない時はXの本物の画像タブへ引き渡す。
+          // suppressNextPhotoRedirectで転送を1回止めるので往復にはならない。
+          const meUser = profileNameFromPath();
+          if (meUser && isProfileImagesMarked()) {
+            suppressNextPhotoRedirect = true;
+            xmrSpaNavigate('/' + meUser + '/media?filter=photo');
+          }
           return;
         }
         firstCell = null;
