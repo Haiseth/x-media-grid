@@ -1237,3 +1237,10 @@ html.xmr-actions-on-focus .xmr-tile.xmr-selected .xmr-tile-actions {
   max-width: 70vw;
   max-height: 90vh;
 }
+
+/* 検索の一時表示で、本文カラム側の検索欄を自前シェル(z-index 40)より前に
+   出すためのクラス。閉じる時に外す。 */
+.xmr-peek-front {
+  position: relative;
+  z-index: 50;
+}

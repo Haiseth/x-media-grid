@@ -4385,19 +4385,76 @@
   // 実機報告：検索以外を触ったりページ移動したりしたら次に戻ってきた時は
   // 元通り隠れていてほしい、とのことなので、この状態はどこにも保存しない
   // （グリッドを離れれば自然に消える一時的な状態）。
+  // 検索欄をこちらの都合で隠している要素。一時表示の間だけ外し、閉じる時に
+  // 元へ戻す（自前で付けたクラスだけを触るので、Xの状態は壊さない）。
+  let peekUnhidden = [];
+  let peekFronted = null;
+
+  function revealSearchHost(input) {
+    peekUnhidden = [];
+    let n = input;
+    let nearest = null;
+    while (n && n !== document.body) {
+      if (n.classList && n.classList.contains('xmr-tablist-hide')) {
+        n.classList.remove('xmr-tablist-hide');
+        peekUnhidden.push(n);
+        if (!nearest) nearest = n;
+      }
+      n = n.parentElement;
+    }
+    // 自前のシェル(z-index 40)の下に隠れてしまうので前へ出す。
+    if (nearest) {
+      nearest.classList.add('xmr-peek-front');
+      peekFronted = nearest;
+    }
+  }
+
+  function restoreSearchHost() {
+    for (const el of peekUnhidden) {
+      if (el.isConnected) el.classList.add('xmr-tablist-hide');
+    }
+    peekUnhidden = [];
+    if (peekFronted && peekFronted.isConnected) peekFronted.classList.remove('xmr-peek-front');
+    peekFronted = null;
+  }
+
+  // 【実機報告】タイムラインから検索して結果ページに移った後、もう一度
+  // 「検索」を押しても何も出てこない。原因は検索欄の置き場所がページで
+  // 変わること：ホームやプロフィールでは右サイドバーの中だが、検索結果
+  // ページではXが本文カラムの上部（タブの上）へ移す。こちらはサイドバーの
+  // 中しか探していなかったため、結果ページでは対象ゼロで空振りしていた。
+  // 置き場所を決め打ちせず、実際に在る方を開く。
   async function openSidebarPeek() {
     const sidebarEl = document.querySelector('[data-testid="sidebarColumn"]');
-    if (!sidebarEl) return;
-    sidebarEl.classList.remove('xmr-sidebar-hide');
+    const inSidebar = sidebarEl && sidebarEl.querySelector('[data-testid="SearchBox_Search_Input"]');
     Grid.sidebarPeekOpen = true;
-    if (Grid.shellEl) Grid.shellEl.style.right = computeShellRight() + 'px';
-    const input = await waitFor(() => sidebarEl.querySelector('[data-testid="SearchBox_Search_Input"]'), 2000, 50);
-    if (input && Grid.sidebarPeekOpen) input.focus();
+    if (inSidebar) {
+      sidebarEl.classList.remove('xmr-sidebar-hide');
+      if (Grid.shellEl) Grid.shellEl.style.right = computeShellRight() + 'px';
+      const input = await waitFor(() => sidebarEl.querySelector('[data-testid="SearchBox_Search_Input"]'), 2000, 50);
+      if (input && Grid.sidebarPeekOpen) input.focus();
+      return;
+    }
+    const pc = document.querySelector('[data-testid="primaryColumn"]');
+    const pcInput = pc && pc.querySelector('[data-testid="SearchBox_Search_Input"]');
+    if (!pcInput) {
+      // どちらにも無い（Xの構造変更等）。サイドバーだけでも出しておけば、
+      // 何も起きずに終わるより手掛かりになる。
+      if (sidebarEl) sidebarEl.classList.remove('xmr-sidebar-hide');
+      if (Grid.shellEl) Grid.shellEl.style.right = computeShellRight() + 'px';
+      return;
+    }
+    revealSearchHost(pcInput);
+    pcInput.focus();
+    try {
+      pcInput.select();
+    } catch (e) {}
   }
 
   function closeSidebarPeek() {
     if (!Grid.sidebarPeekOpen) return;
     Grid.sidebarPeekOpen = false;
+    restoreSearchHost();
     const sidebarEl = document.querySelector('[data-testid="sidebarColumn"]');
     if (sidebarEl && Settings.hideSidebar) sidebarEl.classList.add('xmr-sidebar-hide');
     if (Grid.shellEl) Grid.shellEl.style.right = computeShellRight() + 'px';
@@ -4435,8 +4492,15 @@
     (e) => {
       if (!Grid.sidebarPeekOpen) return;
       const sidebarEl = document.querySelector('[data-testid="sidebarColumn"]');
+      // 検索結果ページでは検索欄が本文カラム側に在る。サイドバー側だけを
+      // 「検索の範囲」と見なしていると、そこを押した瞬間に「外側を押した」と
+      // 誤判定して一時表示を閉じてしまい、入力も予測候補のクリックも
+      // 一緒に潰れる（予測候補で同じ失敗をした経緯が上のコメントにある）。
+      // 一時表示のために前へ出した本文カラム側の入れ物も範囲に含める。
       const widgetEl = sidebarEl && findSearchWidgetEl(sidebarEl);
-      if (!widgetEl || !widgetEl.contains(e.target)) closeSidebarPeek();
+      const inSidebarWidget = widgetEl && widgetEl.contains(e.target);
+      const inColumnWidget = peekFronted && peekFronted.contains(e.target);
+      if (!inSidebarWidget && !inColumnWidget) closeSidebarPeek();
     },
     true
   );
