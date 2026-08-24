@@ -3776,11 +3776,25 @@
       if (!key || Grid.seen.has(key)) continue;
 
       if (photoImgs.length === 0) {
+        // 【実機報告で判明した取りこぼし】画像付きの投稿がグリッドに出ない
+        // ことがある。原因は下のタイムアウト：画像が数秒で描画されなければ
+        // 「本当に画像なし」と確定してxmrDoneを付け、以後そのセルを永久に
+        // 見なくなる。ところがXは画面から遠いセルの画像を読み込まないため、
+        // 収集スクロールで通り過ぎただけの投稿が「テキスト」と誤判定されて
+        // 捨てられていた（実測：写真リンクは在るのにtweetPhotoが0個）。
+        // 画像リンク（/photo/）や動画プレイヤーが在れば、まだ描画されて
+        // いないだけでメディアを持つことは確定している。この場合はいくら
+        // 待っても確定させず保留のままにする。セルが使い回されて別の投稿に
+        // なれば自然に消えるし、後で近くへ戻ってくれば今度こそ拾える。
+        const hasMediaHint =
+          !!c.querySelector('a[href*="/photo/"]') ||
+          !!c.querySelector('[data-testid="videoComponent"], [data-testid="videoPlayer"]');
         const firstSeen = Grid.pending.get(key);
         if (firstSeen === undefined) {
           Grid.pending.set(key, now);
           continue; // 初回：画像がまだ描画中かもしれないので次回まで様子見
         }
+        if (hasMediaHint) continue; // メディアを持つのは確定。確定処理へ落とさない
         if (now - firstSeen < CONFIG.photoPendingMs) continue; // 猶予期間中
 
         // タイムアウト：本当に画像なしと確定
@@ -3883,6 +3897,19 @@
     return mode === 'profile' ? CONFIG.initialFillCountSparse : CONFIG.initialFillCount;
   }
 
+  // 画像リンクは在るのに画像がまだ描画されていないセルが、裏のリストに
+  // 残っているか。収集を1段進める前の「もう少し待つ」判断に使う。
+  function mediaPendingInSource() {
+    // cellSelectorはactivateGridInner内のローカル変数なのでここからは見えない。
+    // 同じ条件を書き下す。
+    for (const c of document.querySelectorAll('[data-testid="primaryColumn"] [data-testid="cellInnerDiv"]')) {
+      if (c.dataset.xmrDone === '1') continue;
+      if (!c.querySelector('a[href*="/photo/"]')) continue;
+      if (!c.querySelector('[data-testid="tweetPhoto"] img')) return true;
+    }
+    return false;
+  }
+
   async function pumpMore(targetCount) {
     if (Grid.pumping) return;
     // 【実機で確定した重要な制約】Xは「ユーザーが実際にタイムラインの一番上に
@@ -3932,6 +3959,13 @@
       await waitForSourceGrowth(CONFIG.pumpStepMinWaitMs, CONFIG.pumpStepMaxWaitMs);
       if (token !== Grid.navToken || !Grid.active) break;
       harvestNew();
+      // まだ画像が描かれていないメディア投稿が残っていたら、ひと呼吸だけ待って
+      // もう一度拾う。ここで拾い損ねるとその投稿はこの回では二度と見ない
+      // （下へ進む一方なので戻ってこない）。
+      if (mediaPendingInSource()) {
+        await sleep(220);
+        harvestNew();
+      }
       const grew = Grid.entries.length !== lastLen;
       if (grew) lastGrowthAt = Date.now();
       lastLen = Grid.entries.length;
