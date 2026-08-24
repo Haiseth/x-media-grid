@@ -2102,20 +2102,35 @@
     actionInFlightAt = Date.now();
     const prevY = window.scrollY;
     const token = Grid.navToken;
-    window.scrollTo(0, Math.max(0, entry.ty - Math.round(window.innerHeight / 2)));
-    for (let i = 0; i < 8 && !article; i++) {
-      await sleep(150);
-      if (token !== Grid.navToken || !Grid.active) {
-        actionInFlight = false;
-        return false; // 待っている間にページ遷移等があれば何もしない
+    // entry.tyは収穫した時点の位置。Xの仮想リストは画像が読み込まれるたびに
+    // 各セルの高さを測り直すので、この値は時間が経つほどズレる。1か所へ跳んで
+    // 見つからなければ即あきらめる作りだったため、少しズレただけで
+    // 「元の投稿を再表示できませんでした」になっていた（実機報告：ちょくちょく
+    // 起きる）。中心から前後へ広げながら探す。
+    const vh = window.innerHeight;
+    const offsets = [0, -0.9, 0.9, -1.8, 1.8];
+    for (const k of offsets) {
+      window.scrollTo(0, Math.max(0, entry.ty - Math.round(vh / 2) + Math.round(k * vh)));
+      for (let i = 0; i < 3 && !article; i++) {
+        await sleep(110);
+        if (token !== Grid.navToken || !Grid.active) {
+          actionInFlight = false;
+          return false; // 待っている間にページ遷移等があれば何もしない
+        }
+        article = articleForEntry(entry);
       }
-      article = articleForEntry(entry);
+      if (article) break;
     }
     if (!article) {
       window.scrollTo(0, prevY);
       actionInFlight = false;
       return false;
     }
+    // 見つかった実際の位置でentry.tyを直しておく。次に同じ投稿を操作する時は
+    // 1回目の跳躍で当たるようになり、ズレが累積しない。
+    const foundCell = article.closest('[data-testid="cellInnerDiv"]');
+    const tyNow = foundCell && (foundCell.style.transform || '').match(/translateY\(([-\d.]+)px\)/);
+    if (tyNow) entry.ty = parseFloat(tyNow[1]);
     try {
       await fn(article); // スクロールを保持したまま操作を最後まで行う
     } finally {
@@ -4385,39 +4400,6 @@
   // 実機報告：検索以外を触ったりページ移動したりしたら次に戻ってきた時は
   // 元通り隠れていてほしい、とのことなので、この状態はどこにも保存しない
   // （グリッドを離れれば自然に消える一時的な状態）。
-  // 検索欄をこちらの都合で隠している要素。一時表示の間だけ外し、閉じる時に
-  // 元へ戻す（自前で付けたクラスだけを触るので、Xの状態は壊さない）。
-  let peekUnhidden = [];
-  let peekFronted = null;
-
-  function revealSearchHost(input) {
-    peekUnhidden = [];
-    let n = input;
-    let nearest = null;
-    while (n && n !== document.body) {
-      if (n.classList && n.classList.contains('xmr-tablist-hide')) {
-        n.classList.remove('xmr-tablist-hide');
-        peekUnhidden.push(n);
-        if (!nearest) nearest = n;
-      }
-      n = n.parentElement;
-    }
-    // 自前のシェル(z-index 40)の下に隠れてしまうので前へ出す。
-    if (nearest) {
-      nearest.classList.add('xmr-peek-front');
-      peekFronted = nearest;
-    }
-  }
-
-  function restoreSearchHost() {
-    for (const el of peekUnhidden) {
-      if (el.isConnected) el.classList.add('xmr-tablist-hide');
-    }
-    peekUnhidden = [];
-    if (peekFronted && peekFronted.isConnected) peekFronted.classList.remove('xmr-peek-front');
-    peekFronted = null;
-  }
-
   // 【実機報告】タイムラインから検索して結果ページに移った後、もう一度
   // 「検索」を押しても何も出てこない。原因は検索欄の置き場所がページで
   // 変わること：ホームやプロフィールでは右サイドバーの中だが、検索結果
@@ -4435,26 +4417,70 @@
       if (input && Grid.sidebarPeekOpen) input.focus();
       return;
     }
-    const pc = document.querySelector('[data-testid="primaryColumn"]');
-    const pcInput = pc && pc.querySelector('[data-testid="SearchBox_Search_Input"]');
-    if (!pcInput) {
-      // どちらにも無い（Xの構造変更等）。サイドバーだけでも出しておけば、
-      // 何も起きずに終わるより手掛かりになる。
-      if (sidebarEl) sidebarEl.classList.remove('xmr-sidebar-hide');
-      if (Grid.shellEl) Grid.shellEl.style.right = computeShellRight() + 'px';
-      return;
+    // 検索結果ページ。Xの検索欄は本文カラムの上部に在るが、こちらのクラスで
+    // 隠れているのではなく自前シェルの下敷きになっているだけで、しかも
+    // 祖先が position:relative + z-index:0 で独立した重ね合わせ文脈を作って
+    // いる（実測）。この中の要素はz-indexをいくつにしてもシェルより前へは
+    // 出せない。新着ピルを穴あき表示で押させようとして撤退したのと同じ構造。
+    // Xの要素を掘り起こすのは筋が悪いので、自前の入力欄を出す。
+    openToolbarSearchInput();
+  }
+
+  // ツールバーの「検索」を入力欄に変える。Xの予測候補は使えないが、確実に
+  // 出て確実に打てる。サイドバーに検索欄が在るページ（ホーム等）では
+  // 従来どおりXの検索を一時表示するので、そちらでは候補も使える。
+  function openToolbarSearchInput() {
+    const bar = Grid.shellEl && Grid.shellEl.querySelector('.xmr-tb-group-config');
+    if (!bar) return;
+    const btn = bar.querySelector('.xmr-tb-search-peek');
+    let box = bar.querySelector('.xmr-tb-searchbox');
+    if (!box) {
+      box = document.createElement('input');
+      box.type = 'text';
+      box.className = 'xmr-tb-searchbox';
+      box.placeholder = t('toolbarSearch');
+      box.addEventListener('keydown', (e) => {
+        // グリッドのキー操作へ漏らさない（文字入力がWASD移動になると悲惨）
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+          const q = box.value.trim();
+          if (!q) return;
+          // 今のタブ種別（話題のポスト／最新／画像…）を保ったまま検索し直す。
+          const f = new URLSearchParams(location.search).get('f');
+          xmrSpaNavigate('/search?q=' + encodeURIComponent(q) + (f ? '&f=' + encodeURIComponent(f) : ''));
+          closeToolbarSearchInput();
+        } else if (e.key === 'Escape') {
+          closeToolbarSearchInput();
+        }
+      });
+      box.addEventListener('blur', () => closeToolbarSearchInput());
+      bar.insertBefore(box, btn || null);
     }
-    revealSearchHost(pcInput);
-    pcInput.focus();
+    if (btn) btn.style.display = 'none';
+    box.style.display = 'block';
+    // 今の検索語を入れておくと、絞り込みの追記も打ち直しもすぐできる。
     try {
-      pcInput.select();
-    } catch (e) {}
+      box.value = new URLSearchParams(location.search).get('q') || '';
+    } catch (e) {
+      box.value = '';
+    }
+    box.focus();
+    box.select();
+  }
+
+  function closeToolbarSearchInput() {
+    const bar = Grid.shellEl && Grid.shellEl.querySelector('.xmr-tb-group-config');
+    if (!bar) return;
+    const box = bar.querySelector('.xmr-tb-searchbox');
+    const btn = bar.querySelector('.xmr-tb-search-peek');
+    if (box) box.style.display = 'none';
+    if (btn) btn.style.display = '';
+    Grid.sidebarPeekOpen = false;
   }
 
   function closeSidebarPeek() {
     if (!Grid.sidebarPeekOpen) return;
     Grid.sidebarPeekOpen = false;
-    restoreSearchHost();
     const sidebarEl = document.querySelector('[data-testid="sidebarColumn"]');
     if (sidebarEl && Settings.hideSidebar) sidebarEl.classList.add('xmr-sidebar-hide');
     if (Grid.shellEl) Grid.shellEl.style.right = computeShellRight() + 'px';
@@ -4499,8 +4525,9 @@
       // 一時表示のために前へ出した本文カラム側の入れ物も範囲に含める。
       const widgetEl = sidebarEl && findSearchWidgetEl(sidebarEl);
       const inSidebarWidget = widgetEl && widgetEl.contains(e.target);
-      const inColumnWidget = peekFronted && peekFronted.contains(e.target);
-      if (!inSidebarWidget && !inColumnWidget) closeSidebarPeek();
+      // 自前の検索入力欄を押した時に「外側」と誤判定しないこと。
+      const inOwnBox = e.target && e.target.closest && e.target.closest('.xmr-tb-searchbox');
+      if (!inSidebarWidget && !inOwnBox) closeSidebarPeek();
     },
     true
   );
