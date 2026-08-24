@@ -95,6 +95,9 @@ const DEFAULT_KEYS = {
   profileToMedia: 'g',
   notInterested: 'x',
   goHome: '1',
+  zoomIn: 'e',
+  zoomOut: 'z',
+  zoomReset: '0',
 };
 
 function loadSettings(cb) {

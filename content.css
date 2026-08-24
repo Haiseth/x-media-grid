@@ -1192,3 +1192,48 @@ html.xmr-actions-on-focus .xmr-tile.xmr-selected .xmr-tile-actions {
   opacity: 1;
   transition: opacity 120ms;
 }
+
+/* 画像ズーム。対象の<img>はtransform-originを左上に固定し、
+   translate+scaleだけで動かす（JS側のzoomSet参照）。 */
+.xmr-fullimg {
+  will-change: transform;
+  cursor: zoom-in;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+/* Xのツイートページ／画像モーダル用の拡大面。自前のビューアが無い場所で
+   拡大キーを押した時だけ出る。シェル(z-index 40)より前に出す。 */
+.xmr-zoomov {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.92);
+}
+.xmr-zoomov.xmr-open {
+  display: flex;
+}
+.xmr-zoomov-img {
+  max-width: 96vw;
+  max-height: 96vh;
+  will-change: transform;
+  cursor: zoom-in;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* 拡大した画像の切り取り枠。画像と同じ大きさに収まるようflexで包む。 */
+.xmr-fullimg-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 70vw;
+  max-height: 90vh;
+}

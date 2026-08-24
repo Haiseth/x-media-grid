@@ -122,6 +122,9 @@
       "optKeyOpenClose": "開く（1枚ならそのまま拡大、複数なら一覧へ）／閉じる・1つ戻る",
       "optKeySpace": "グリッド一覧では1画面分くらい滑らかにスクロール／複数画像の一覧では選択中の1枚を単独表示",
       "optKeyEsc": "閉じる",
+      "optKeyZoomIn": "拡大（拡大表示中は1段階ごと。ツイートページや画像を開いている時はこのキーで拡大表示を開く）",
+      "optKeyZoomOut": "縮小",
+      "optKeyZoomReset": "等倍に戻す",
       "optKeyOpenTweet": "そのツイートを開く（同じタブで即表示。戻ると元の位置に復帰）",
       "optKeyOpenMedia": "その投稿者のページを開く（行き先は上の表示設定で選択）",
       "optKeyLike": "いいね",
@@ -259,6 +262,9 @@
       "optKeyOpenClose": "Open (zooms a single image directly, opens the list for multiple images) / close · go back one level",
       "optKeySpace": "In the grid, smoothly scrolls about one screen; in a multi-image list, shows the selected image on its own",
       "optKeyEsc": "Close",
+      "optKeyZoomIn": "Zoom in (one step at a time; on a post page or an opened photo this key opens the zoom view)",
+      "optKeyZoomOut": "Zoom out",
+      "optKeyZoomReset": "Back to actual size",
       "optKeyOpenTweet": "Open the post (in the same tab; going back restores your spot)",
       "optKeyOpenMedia": "Open the author's page (destination is chosen in Display settings above)",
       "optKeyLike": "Like",
@@ -391,6 +397,9 @@
     notInterested: 'x',
     profileToMedia: 'g',
     goHome: '1',
+    zoomIn: 'e',
+    zoomOut: 'z',
+    zoomReset: '0',
   };
   // hideSidebarの初期値はfalse（サイドバーは隠さない＝そのまま全部表示）。
   // tileActionsの初期値はtrue（タイルにマウスを乗せた時のいいね等のボタンを出す）。
@@ -1612,21 +1621,235 @@
   // 届くまで前の画像を表示し続けるためこの崩れが起きない）。既に同じ構造
   // （画像1枚+キャプション）が表示されている時だけ既存要素を使い回し、
   // 別の階層（sub一覧等）から来た時だけ作り直す。
+  // ============================================================
+  // 画像ズーム
+  // Xの不便な点：タイムラインでもツイートページでも、画像を「単体で開き直す」
+  // までは拡大できない。グリッドの拡大表示でもツイートページでも、その場で
+  // 拡大できるようにする。
+  // 実装は<img>1枚に対する transform: translate(x,y) scale(s) だけ。
+  // transform-originを左上(0 0)に固定してあるので、「指した点を動かさない
+  // まま拡大する」式が素直に書ける（原点が中央だと補正項が増える）。
+  // ============================================================
+  const ZOOM_MIN = 1;
+  const ZOOM_MAX = 8;
+  const ZOOM_STEP = 1.6;
+  const Zoom = { el: null, scale: 1, x: 0, y: 0, dragging: false };
+
+  function zoomApply() {
+    const el = Zoom.el;
+    if (!el) return;
+    if (Zoom.scale <= ZOOM_MIN) {
+      el.style.transform = '';
+      el.style.cursor = 'zoom-in';
+    } else {
+      el.style.transform = 'translate(' + Zoom.x + 'px,' + Zoom.y + 'px) scale(' + Zoom.scale + ')';
+      el.style.cursor = Zoom.dragging ? 'grabbing' : 'grab';
+    }
+  }
+
+  // 拡大した画像が元の枠を覆ったままになるように平行移動量を制限する
+  // （画面外へ飛ばして「画像が消えた」状態にしないため）。
+  function zoomClamp() {
+    const el = Zoom.el;
+    if (!el || Zoom.scale <= ZOOM_MIN) return;
+    const bw = el.offsetWidth;
+    const bh = el.offsetHeight;
+    Zoom.x = Math.min(0, Math.max(bw - bw * Zoom.scale, Zoom.x));
+    Zoom.y = Math.min(0, Math.max(bh - bh * Zoom.scale, Zoom.y));
+  }
+
+  // clientX/Yを省くと画像の中央を基準に拡大する（キー操作はこちら）。
+  function zoomSet(scale, clientX, clientY) {
+    const el = Zoom.el;
+    if (!el) return;
+    const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, scale));
+    const rect = el.getBoundingClientRect();
+    const cx = clientX === undefined ? rect.left + rect.width / 2 : clientX;
+    const cy = clientY === undefined ? rect.top + rect.height / 2 : clientY;
+    const ratio = next / Zoom.scale;
+    Zoom.x = cx - rect.left + Zoom.x - (cx - rect.left) * ratio;
+    Zoom.y = cy - rect.top + Zoom.y - (cy - rect.top) * ratio;
+    Zoom.scale = next;
+    if (next <= ZOOM_MIN) {
+      Zoom.x = 0;
+      Zoom.y = 0;
+    }
+    zoomClamp();
+    zoomApply();
+  }
+
+  function zoomAttach(el, resetNow) {
+    if (!el) return;
+    const changed = Zoom.el !== el;
+    Zoom.el = el;
+    el.style.transformOrigin = '0 0';
+    if (changed || resetNow) {
+      Zoom.scale = 1;
+      Zoom.x = 0;
+      Zoom.y = 0;
+      zoomApply();
+    }
+  }
+
+  function zoomStepKey(k) {
+    if (k === Settings.keys.zoomIn) zoomSet(Zoom.scale * ZOOM_STEP);
+    else if (k === Settings.keys.zoomOut) zoomSet(Zoom.scale / ZOOM_STEP);
+    else zoomSet(1);
+  }
+
+  function isZoomKey(k) {
+    return k === Settings.keys.zoomIn || k === Settings.keys.zoomOut || k === Settings.keys.zoomReset;
+  }
+
+  // クリックで1段階拡大、上限まで行ったら等倍へ戻す。ドラッグと区別するため、
+  // ポインタがほとんど動かなかった時だけクリック扱いにする。
+  function zoomBindPointer(el) {
+    let downX = 0;
+    let downY = 0;
+    let baseX = 0;
+    let baseY = 0;
+    let moved = 0;
+    let active = false;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      active = true;
+      moved = 0;
+      downX = e.clientX;
+      downY = e.clientY;
+      baseX = Zoom.x;
+      baseY = Zoom.y;
+      zoomAttach(el);
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch (err) {}
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!active) return;
+      const dx = e.clientX - downX;
+      const dy = e.clientY - downY;
+      moved = Math.max(moved, Math.abs(dx) + Math.abs(dy));
+      if (Zoom.scale <= ZOOM_MIN || moved < 5) return;
+      Zoom.dragging = true;
+      Zoom.x = baseX + dx;
+      Zoom.y = baseY + dy;
+      zoomClamp();
+      zoomApply();
+    });
+    const end = (e) => {
+      if (!active) return;
+      active = false;
+      Zoom.dragging = false;
+      try {
+        el.releasePointerCapture(e.pointerId);
+      } catch (err) {}
+      if (moved < 5) {
+        // クリック：1段階拡大。上限まで来ていたら等倍に戻す。
+        if (Zoom.scale >= ZOOM_MAX - 0.001) zoomSet(1);
+        else zoomSet(Zoom.scale * ZOOM_STEP, e.clientX, e.clientY);
+      }
+      zoomApply();
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      zoomAttach(el);
+      const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+      zoomSet(Zoom.scale * factor, e.clientX, e.clientY);
+    }, { passive: false });
+    // 画像のドラッグ＆ドロップ（ゴースト画像）が拡大操作の邪魔になる
+    el.addEventListener('dragstart', (e) => e.preventDefault());
+  }
+
+  // Xのツイートページ／画像モーダルには自前のビューアが無い。そこで拡大キーを
+  // 押した時は、そのページで一番大きく表示されている画像を専用のオーバーレイに
+  // 出して拡大できるようにする。Xのimgに直接transformを掛ける手もあるが、
+  // 親要素のoverflowで切れるうえXの再描画で消されるため、自前の面に載せる。
+  function pageZoomImageSrc() {
+    const layers = document.getElementById('layers');
+    const scopes = [layers, document.querySelector('[data-testid="primaryColumn"]')].filter(Boolean);
+    let best = null;
+    for (const scope of scopes) {
+      for (const im of scope.querySelectorAll('img')) {
+        if (!/pbs\.twimg\.com\/media\//.test(im.src || '')) continue;
+        const r = im.getBoundingClientRect();
+        if (r.width < 80 || r.height < 80) continue;
+        if (!best || r.width * r.height > best.area) best = { src: im.src, area: r.width * r.height };
+      }
+      // 画像モーダル(#layers)に見つかったらそれが今見ているもの。下は見ない。
+      if (best) break;
+    }
+    return best ? best.src : null;
+  }
+
+  function zoomOverlayEl() {
+    return document.querySelector('.xmr-zoomov');
+  }
+
+  function zoomOverlayOpen() {
+    const ov = zoomOverlayEl();
+    return !!(ov && ov.classList.contains('xmr-open'));
+  }
+
+  function closeZoomOverlay() {
+    const ov = zoomOverlayEl();
+    if (ov) ov.classList.remove('xmr-open');
+    Zoom.el = null;
+  }
+
+  function openZoomOverlay(src) {
+    let ov = zoomOverlayEl();
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.className = 'xmr-zoomov';
+      const im = document.createElement('img');
+      im.className = 'xmr-zoomov-img';
+      ov.appendChild(im);
+      // 背景（画像の外側）を押したら閉じる。画像自体のクリックは拡大なので、
+      // 対象がオーバーレイ本体の時だけ閉じる。
+      ov.addEventListener('pointerdown', (e) => {
+        if (e.target === ov) closeZoomOverlay();
+      });
+      zoomBindPointer(im);
+      document.body.appendChild(ov);
+    }
+    const im = ov.querySelector('.xmr-zoomov-img');
+    im.src = fullSrc(src);
+    ov.classList.add('xmr-open');
+    zoomAttach(im, true);
+  }
+
   function renderFocusedLayout(src, entry, level, badgeText) {
     const overlay = ensureOverlay();
     const body = overlay.querySelector('.xmr-overlay-body');
     let layout = body.children.length === 1 ? body.firstElementChild : null;
-    let img = layout ? layout.querySelector(':scope > .xmr-fullimg') : null;
+    // 画像は拡大するとクリップ枠(.xmr-fullimg-wrap)からはみ出す分が切られる。
+    // 直下ではなく子孫として探す（枠を1段挟んだため）。
+    let img = layout ? layout.querySelector('.xmr-fullimg') : null;
     if (!layout || !img) {
       body.innerHTML = '';
       layout = document.createElement('div');
       layout.className = 'xmr-viewer-layout';
       img = document.createElement('img');
       img.className = 'xmr-fullimg';
-      layout.appendChild(img);
+      zoomBindPointer(img);
+      // 拡大中の画像がキャプション側や画面外へ流れ出さないよう、画像と
+      // 同じ大きさの枠で囲って切り取る（枠が無いとscaleした分がそのまま
+      // レイアウトの外まで描かれてしまう）。
+      const imgWrap = document.createElement('div');
+      imgWrap.className = 'xmr-fullimg-wrap';
+      imgWrap.appendChild(img);
+      layout.appendChild(imgWrap);
       body.appendChild(layout);
     }
-    if (src) img.src = fullSrc(src);
+    if (src) {
+      const nextSrc = fullSrc(src);
+      const srcChanged = img.getAttribute('src') !== nextSrc;
+      if (srcChanged) img.src = nextSrc;
+      // 別の画像に移ったら等倍に戻す（前の画像の拡大率が残っていると、
+      // 次の画像がいきなり一部だけ表示されて何が映っているか分からない）。
+      zoomAttach(img, srcChanged);
+    }
     const oldBadge = layout.querySelector(':scope > .xmr-viewer-imgcount');
     if (oldBadge) oldBadge.remove();
     if (badgeText) {
@@ -2665,6 +2888,13 @@
       e.preventDefault();
       return;
     }
+    // 拡大表示（1枚表示）の時だけ拡大キーを受け付ける。一覧の状態で効かせても
+    // 対象が定まらないので何もしない。
+    if (isZoomKey(k) && (Grid.level === 'view' || Grid.level === 'subview')) {
+      e.preventDefault();
+      zoomStepKey(k);
+      return;
+    }
     // グリッド一覧の状態ではQは「開く」のまま（1枚ならビューア、複数ならサブグリッドへ）。
     // サブグリッド／ビューアの状態からはQは常に「閉じる／1階層戻る」。
     // サブグリッドで特定の1枚を選んで開く操作だけSpaceに分離した
@@ -2921,6 +3151,48 @@
     // グリッド外（Xの通常表示）でも同じ理由でリピートを弾く（上のコメント参照）
     if (e.repeat && isRepeatUnsafeKey(k)) {
       e.preventDefault();
+      return;
+    }
+
+    // 拡大オーバーレイが開いている間は、そちらの操作を最優先で処理する
+    // （ここを後回しにすると、閉じるつもりのQでXの別の動作が走る）。
+    if (zoomOverlayOpen()) {
+      if (k === Settings.keys.openClose || e.key === 'Escape') {
+        swallowKey(e);
+        closeZoomOverlay();
+        return;
+      }
+      if (isZoomKey(k)) {
+        swallowKey(e);
+        zoomStepKey(k);
+        return;
+      }
+      // 拡大中はWASD/矢印で見たい場所へ寄せる（ここにはグリッドの移動操作が
+      // 無いので取り合いにならない）。
+      const pan = { [Settings.keys.moveUp]: [0, 1], [Settings.keys.moveDown]: [0, -1], [Settings.keys.moveLeft]: [1, 0], [Settings.keys.moveRight]: [-1, 0] };
+      const arrow = { arrowup: [0, 1], arrowdown: [0, -1], arrowleft: [1, 0], arrowright: [-1, 0] };
+      const dir = pan[k] || arrow[k];
+      if (dir) {
+        swallowKey(e);
+        if (Zoom.scale > 1) {
+          Zoom.x += dir[0] * 80;
+          Zoom.y += dir[1] * 80;
+          zoomClamp();
+          zoomApply();
+        }
+        return;
+      }
+      return; // 拡大中は他のキーをXへ通さない
+    }
+
+    // ツイートページ／画像モーダルで拡大キー。自前のビューアが無い場所なので、
+    // 拡大キーが「拡大表示を開く」入り口も兼ねる。縮小・等倍は開いてから。
+    if (isZoomKey(k)) {
+      if (k !== Settings.keys.zoomIn) return;
+      const src = pageZoomImageSrc();
+      if (!src) return; // 画像が無いページでは邪魔をしない
+      swallowKey(e);
+      openZoomOverlay(src);
       return;
     }
 
