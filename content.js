@@ -1691,6 +1691,11 @@
     }
   }
 
+  // 拡大するほど1回の移動量を増やす係数。
+  function zoomPanFactor() {
+    return Math.min(3, Math.sqrt(Math.max(1, Zoom.scale)));
+  }
+
   function zoomStepKey(k) {
     if (k === Settings.keys.zoomIn) zoomSet(Zoom.scale * ZOOM_STEP);
     else if (k === Settings.keys.zoomOut) zoomSet(Zoom.scale / ZOOM_STEP);
@@ -1730,8 +1735,12 @@
       moved = Math.max(moved, Math.abs(dx) + Math.abs(dy));
       if (Zoom.scale <= ZOOM_MIN || moved < 5) return;
       Zoom.dragging = true;
-      Zoom.x = baseX + dx;
-      Zoom.y = baseY + dy;
+      // 等倍と同じ1:1でドラッグすると、拡大するほど端まで行くのに何回も
+      // 持ち替えが要る（実機報告：移動幅が小さい）。倍率に応じて移動量を
+      // 増やす。scaleそのままだと8倍で行き過ぎるので平方根にして上限3。
+      const pf = zoomPanFactor();
+      Zoom.x = baseX + dx * pf;
+      Zoom.y = baseY + dy * pf;
       zoomClamp();
       zoomApply();
     });
@@ -1857,6 +1866,24 @@
       badge.className = 'xmr-viewer-imgcount';
       badge.textContent = badgeText;
       layout.appendChild(badge);
+    }
+    // 動画の投稿は拡大表示でもサムネイルのままなので、タイルと同じ再生
+    // アイコンを中央に出す（実機報告：Qで開くと再生ボタンが無い）。押すと
+    // そのポストを同じタブで開き、Xの本物のプレイヤーで再生できる。
+    const imgWrapEl = layout.querySelector('.xmr-fullimg-wrap');
+    if (imgWrapEl) {
+      const oldPlay = imgWrapEl.querySelector('.xmr-video-badge');
+      if (oldPlay) oldPlay.remove();
+      if (entry && entry.isVideo) {
+        const play = document.createElement('div');
+        play.className = 'xmr-video-badge';
+        play.textContent = '▶';
+        play.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          openEntrySameTab(entry, false);
+        });
+        imgWrapEl.appendChild(play);
+      }
     }
     const oldCaption = layout.querySelector(':scope > .xmr-viewer-caption');
     if (oldCaption) oldCaption.remove();
@@ -3190,8 +3217,9 @@
       if (dir) {
         swallowKey(e);
         if (Zoom.scale > 1) {
-          Zoom.x += dir[0] * 80;
-          Zoom.y += dir[1] * 80;
+          const step = 80 * zoomPanFactor();
+          Zoom.x += dir[0] * step;
+          Zoom.y += dir[1] * step;
           zoomClamp();
           zoomApply();
         }
