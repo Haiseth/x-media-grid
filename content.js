@@ -874,12 +874,13 @@
     // かければ、差し替え前とほぼ同じ形で見られる。既定ではそちらへ寄せる。
     // 動画側(filter=video)は従来のままなので触らない。Xの新グリッドを見たい
     // 時はタブバーの「画像」を押せば1回だけ抑制されて素通しになる。
-    if (Settings.autoActionable && filterParam !== 'video') {
+    // 画像のみ表示がOFFなら、こちらのグリッドへ寄せる意味が無い（グリッドに
+    // しないのだから操作もできない）。Xの画像タブをそのまま見せる。
+    // 以前はここで問答無用にONへ書き戻していたため、ユーザーがOFFにしても
+    // メディアを開き直すたびに復活していた。
+    if (Settings.autoActionable && filterParam !== 'video' && getImageOnly('media')) {
       const um = location.pathname.match(/^\/([^/]+)\/media\/?$/);
       if (um) {
-        try {
-          setImageOnly('profile', true);
-        } catch (e) {}
         history.replaceState(history.state, '', profileImagesPath(um[1]));
         window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
         return;
@@ -1173,7 +1174,14 @@
     if (isLikesPage()) return 'likes';
     if (isPhotoMediaPage()) return 'media';
     if (isSearchMediaPage()) return 'search';
-    if (isProfilePostsPage()) return 'profile';
+    // 【設計の訂正】画像表示に専用のscope('profile')を与えたのが誤りだった。
+    // 同じ「アカウントの画像を見る」ことに対してフラグが2つ（Xの画像タブ用の
+    // mediaと、こちらの画像グリッド用のprofile）できてしまい、片方をOFFに
+    // してももう片方がONのまま、しかも移動のたびに強制的にONへ戻していた。
+    // 実機報告：OFFにすると勝手にポストへ飛ばされ、メディアへ入り直すと
+    // 画像のみ表示がONに戻り、結局OFFにできない。
+    // 「画像を見る」ためのフラグは1つ(media)に統一する。
+    if (isProfilePostsPage()) return 'media';
     return null;
   }
 
@@ -1192,10 +1200,9 @@
     // likes特有の処理（テキストのみ投稿もタイル化）を一切踏まない、
     // 素のグリッドとして動く。
     if (isSearchMediaPage()) return getImageOnly('search') ? 'search' : null;
-    // プロフィールのポストタブ。既定はOFF（プロフィールを開くたびに勝手に
-    // グリッドになると驚くため）。ツールバーの「操作できる表示」を押した
-    // 時だけONにして飛ばす。
-    if (isProfilePostsPage()) return getImageOnly('profile') ? 'profile' : null;
+    // 印付きURL（画像表示）だけが対象。素の/ユーザー名はXの普通のポスト
+    // 一覧のままなので、ここでグリッド化することはない。
+    if (isProfilePostsPage()) return getImageOnly('media') ? 'profile' : null;
     return null;
   }
 
@@ -1291,7 +1298,6 @@
     else if (scope === 'media') name = t('scopeMedia');
     else if (scope === 'likes') name = t('scopeLikes');
     else if (scope === 'search') name = t('scopeSearch');
-    else if (scope === 'profile') name = t('scopeProfile');
     // タブ名がまだ取れない場合（currentHomeTabTextが空を返す）は、括弧ごと
     // 省いて「画像のみ表示: ON」と出す。中途半端な言語の混在を避けるため。
     const base = name ? t('imageOnlyLabel', [name]) : t('imageOnlyLabelPlain');
@@ -1354,8 +1360,19 @@
       btn.addEventListener('click', () => {
         const s = currentImageOnlyScope();
         if (!s) return;
-        setImageOnly(s, !getImageOnly(s));
+        const next = !getImageOnly(s);
+        setImageOnly(s, next);
         refreshImageOnlyToggleLabel();
+        // 印付きURL(/ユーザー名#xmrimg)でOFFにした場合、そのURLはパスとしては
+        // ポストタブなので、そのまま解除するとポスト一覧に落ちる（実機報告：
+        // OFFにすると急にポストへ移動される）。押したのは「画像表示をやめる」で
+        // あって「ポストを見る」ではないので、Xの画像タブへ渡す。
+        const user = profileNameFromPath();
+        if (!next && user && isProfileImagesMarked()) {
+          suppressNextPhotoRedirect = true;
+          xmrSpaNavigate('/' + user + '/media?filter=photo');
+          return;
+        }
         onNavigate();
       });
       document.body.appendChild(btn);
@@ -2620,7 +2637,7 @@
       // 本物のタイムラインなので取りこぼしが無い。
       const m = location.pathname.match(/^\/([^/]+)\/media/);
       if (!m) return null;
-      return { path: profileImagesPath(m[1]), scope: 'profile' };
+      return { path: profileImagesPath(m[1]), scope: 'media' };
     }
     if (Grid.mode === 'search') {
       // 検索のメディアタブ(f=media)からは、同じ検索語のまま「最新」へ。
