@@ -403,10 +403,11 @@
   };
   // hideSidebarの初期値はfalse（サイドバーは隠さない＝そのまま全部表示）。
   // tileActionsの初期値はtrue（タイルにマウスを乗せた時のいいね等のボタンを出す）。
-  // fTarget: Fキー（投稿者ページ）の行き先。'profile'=プロフィール（ポスト
-  // 一覧）/'media'=メディア欄。配布を見据えたフィードバック「まずアカウント
-  // に飛びたい人の方が多いはず」を受けてデフォルトはprofile（メディア欄派は
-  // 設定で切替）。
+  // fDirectMedia: Fキー（投稿者ページ）でメディア欄へ直行するか。初期値false
+  // ＝プロフィール（ポスト一覧）へ飛ぶ。「まずアカウントに飛びたい人の方が
+  // 多いはず」というフィードバックによる既定で、画像だけ追いたい人が設定で
+  // ONにする。旧設定fTarget（'profile'/'media'の選択式）から移行しており、
+  // fTarget==='media'を保存している人は自動的にONとして引き継ぐ。
   const Settings = {
     hideSidebar: false,
     tileActions: true,
@@ -414,7 +415,7 @@
     // キーボードで見て回る人にとっては、今どれに何ができるのかが選択中の
     // タイルに出ていた方が分かりやすい、という実機要望。初期値ON。
     actionsOnFocus: true,
-    fTarget: 'profile',
+    fDirectMedia: false,
     accentColor: '', // ''=既定（Xブランド青）。#rrggbbでアクセント色を一括変更
     seenColor: '', // ''=既定（テーマ別の青系）。#rrggbbで既読の帯色を変更
     newPostsBanner: true, // グリッド上の「新しいポストを表示」バナー
@@ -477,7 +478,10 @@
     if (typeof saved.hideHomeDot === 'boolean') Settings.hideHomeDot = saved.hideHomeDot;
     if (typeof saved.hideNotifBadge === 'boolean') Settings.hideNotifBadge = saved.hideNotifBadge;
     applyNavBadgePrefs();
-    if (saved.fTarget === 'media' || saved.fTarget === 'profile') Settings.fTarget = saved.fTarget;
+    // 旧設定fTarget（選択式）からの移行。新しいfDirectMediaが保存されて
+    // いればそちらを優先し、無ければ旧値を読み替える（'media'=ON）。
+    if (saved.fTarget === 'media' || saved.fTarget === 'profile') Settings.fDirectMedia = saved.fTarget === 'media';
+    if (typeof saved.fDirectMedia === 'boolean') Settings.fDirectMedia = saved.fDirectMedia;
     if (typeof saved.accentColor === 'string') Settings.accentColor = saved.accentColor;
     if (typeof saved.seenColor === 'string') Settings.seenColor = saved.seenColor;
     applyCustomColors();
@@ -830,6 +834,40 @@
   // 何があってもポストに留める」という形で押さえる。Fキーからメディアへ直行
   // する機能は猶予外なので今まで通り効く。
   let postsTabIntentUntil = 0;
+  // 【実機報告「ポストに戻った後、メディアに行くとポストに戻される・メディアに
+  // 行けない」の修正】この猶予を「4秒」という時間だけで持たせていたのが誤り
+  // だった。実測したURL遷移：
+  //   /USER#xmrimg → (ポストを押す) /USER → 1.1秒後にX自身が /USER/media へ
+  //   → 猶予が効いて /USER へ押し戻す
+  // 押し戻し自体は正しい（これがこの猶予の目的）。問題は猶予が残り2.9秒
+  // 生き続けること。人は1秒後には次のタブを押すので、**本人がメディアを
+  // 押した操作まで同じ猶予に飲み込まれて**ポストへ戻されていた。
+  // Xの自動遷移と本人のクリックの決定的な違いは「その間に本物の操作が
+  // あったかどうか」。そこで猶予は時間だけで持たず、**次に本物の操作
+  // （信頼できるpointerdown/keydown）が起きた時点で捨てる**。Xの自動遷移は
+  // 操作を伴わないので今まで通り押し戻せて、本人の次の操作は必ず通る。
+  let postsIntentGestureHandler = null;
+  function releasePostsTabIntentOnGesture() {
+    if (postsIntentGestureHandler) return;
+    postsIntentGestureHandler = (ev) => {
+      if (!ev.isTrusted) return; // 自前のclick()委譲では捨てない
+      postsTabIntentUntil = 0;
+      document.removeEventListener('pointerdown', postsIntentGestureHandler, true);
+      document.removeEventListener('keydown', postsIntentGestureHandler, true);
+      postsIntentGestureHandler = null;
+    };
+    // 猶予を立てた当のクリックがまだ伝播中なので、次のタスクまで待ってから
+    // 張る（同じクリックで即座に捨ててしまわないように）。
+    setTimeout(() => {
+      if (!postsIntentGestureHandler) return;
+      document.addEventListener('pointerdown', postsIntentGestureHandler, true);
+      document.addEventListener('keydown', postsIntentGestureHandler, true);
+    }, 0);
+  }
+  function armPostsTabIntent() {
+    postsTabIntentUntil = Date.now() + 4000;
+    releasePostsTabIntentOnGesture();
+  }
   function autoRedirectMediaPhoto() {
     // 検索の「メディア」タブもプロフィールの画像タブと同じ差し替え構造で、
     // いいね等のボタンがDOMに存在しない。同じ検索語のまま「最新」に
@@ -878,7 +916,19 @@
     // しないのだから操作もできない）。Xの画像タブをそのまま見せる。
     // 以前はここで問答無用にONへ書き戻していたため、ユーザーがOFFにしても
     // メディアを開き直すたびに復活していた。
-    if (Settings.autoActionable && filterParam !== 'video' && getImageOnly('media')) {
+    // 【実機フィードバック「2つの設定が1つになっている気がする」への修正】
+    // ここにphotoFirstの判定が無かったため、「メディア欄を開いたら画像を優先」
+    // をOFFにしても素の/USER/mediaが画像側へ寄せられ、OFFが効かなかった
+    // （＝2つの設定が実質1つに潰れていた）。photoFirstがOFFなのは「動画側で
+    // いい」という意思表示なので、Xに任せてそのまま通す。ただしURLが明示的に
+    // 画像(?filter=photo)を指している時は本人が画像を選んでいるので、OFFでも
+    // 操作できる表示へ寄せる。
+    if (
+      Settings.autoActionable &&
+      filterParam !== 'video' &&
+      (Settings.photoFirst || filterParam === 'photo') &&
+      getImageOnly('media')
+    ) {
       const um = location.pathname.match(/^\/([^/]+)\/media\/?$/);
       if (um) {
         history.replaceState(history.state, '', profileImagesPath(um[1]));
@@ -1211,6 +1261,13 @@
   // 狙って監視する専用のMutationObserverを別途用意する（body全体を見る
   // bodyObserverでやると、タイムラインの頻繁な描画更新のたびに毎回
   // currentGridMode()を再評価することになり無駄が大きいため）。
+  // ホームのタブ一覧（おすすめ/フォロー中/リスト）と、プロフィール・検索の
+  // タブ一覧（ポスト/返信/…）を見分ける。実機確認：ホームのタブはURLを
+  // 持たないdiv[role=tab]、プロフィール・検索のタブは必ず<a href>を持つ。
+  // 表示文言を見ないので英語UIでも同じように効く。
+  function isHomeStyleTablist(tl) {
+    return !!tl && !tl.querySelector('a[role="tab"], [role="tab"] a');
+  }
   let homeTabObserver = null;
   let homeTabObserverTarget = null;
   async function ensureHomeTabObserver() {
@@ -1222,15 +1279,23 @@
       }
       return;
     }
+    // 「まだホームのタブ一覧が無い」だけでなく「前のページのタブ一覧が
+    // まだ残っている」時も待つ必要がある（プロフィールから戻ると、Xが
+    // 入れ替える前のアカウントのタブ一覧がここで見つかってしまう）。
+    // そのまま監視対象にすると、Xが本物のホームのタブ一覧に差し替えた
+    // 瞬間に監視先が外れた要素になり、以後ホームのタブ切替を検知できない。
     let tablist = document.querySelector('[data-testid="primaryColumn"] [role="tablist"]');
-    if (!tablist) {
+    if (!isHomeStyleTablist(tablist)) {
       // 実機報告：他のページからホームへ戻った直後、画像のみ表示がONの
       // はずなのにグリッド化されず、更新等の別操作をして初めて反映される
       // ことがあった。onNavigate()が呼ばれた瞬間にはまだXがホームの
       // タブ一覧を描画し終えていないタイミングがあり、この関数がタブ一覧を
       // 見つけられないまま即returnしていたのが原因と考えられる。少し
       // 待って再度探す。
-      tablist = await waitFor(() => document.querySelector('[data-testid="primaryColumn"] [role="tablist"]'), 3000, 100);
+      tablist = await waitFor(() => {
+        const tl = document.querySelector('[data-testid="primaryColumn"] [role="tablist"]');
+        return isHomeStyleTablist(tl) ? tl : null;
+      }, 3000, 100);
       if (!isHomePage() || !tablist) return; // 待っている間に他ページへ移動していたら何もしない
     }
     if (tablist === homeTabObserverTarget) return;
@@ -1432,8 +1497,20 @@
     refreshOverlayHint(overlay);
     document.body.appendChild(overlay);
     overlay.querySelector('.xmr-overlay-close').addEventListener('click', () => closeOverlayLevel());
+    // 画像の外側（黒い余白）はどこを押しても閉じる。
+    // 【実機フィードバック】以前はオーバーレイ要素そのものを押した時だけ
+    // 閉じていた。等倍表示では余白＝オーバーレイなので効いていたが、
+    // 拡大中は覗き窓(.xmr-fullimg-wrap)が画面いっぱいに広がる（v4.6.2）ため、
+    // 余白を押しても窓に当たるだけで閉じなくなっていた。画像・キャプション・
+    // ボタン類「以外」の入れ物を押した時は閉じる、という規則に変える。
+    const backdropClass = ['xmr-overlay-body', 'xmr-viewer-layout', 'xmr-fullimg-wrap', 'xmr-subgrid'];
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) closeOverlayLevel();
+      const t = e.target;
+      if (t === overlay) {
+        closeOverlayLevel();
+        return;
+      }
+      if (t && t.classList && backdropClass.some((c) => t.classList.contains(c))) closeOverlayLevel();
     });
     Grid.overlay = overlay;
     return overlay;
@@ -1611,9 +1688,14 @@
       const img = document.createElement('img');
       img.src = fullSrc(src);
       if (i === Grid.subSelIndex) img.classList.add('xmr-selected');
+      // 実機フィードバック「1ポストに4枚とか入っているやつは、マウスの
+      // クリックで開けた方が直感的」。以前は押しても選択枠が移るだけで、
+      // 開くにはSpace/Qを押す必要があった（キーボードだけで見て回る人向けの
+      // 挙動をマウスにもそのまま当てていた）。押したら開く方が自然なので、
+      // クリックはそのまま単独表示へ入る。選択だけしたい場合はW/A/S/Dで動かす。
       img.addEventListener('click', () => {
         Grid.subSelIndex = i;
-        renderSubgrid();
+        renderSubImageFocus();
       });
       grid.appendChild(img);
     });
@@ -1652,27 +1734,68 @@
   const ZOOM_STEP = 1.6;
   const Zoom = { el: null, scale: 1, x: 0, y: 0, dragging: false };
 
+  // 拡大した画像を覗く「窓」。拡大表示では画像を入れている
+  // .xmr-fullimg-wrap がそれにあたる（overflow:hiddenで切り取っている）。
+  // それ以外（ツイートページ用のオーバーレイ等）は画像自身を窓とみなす。
+  function zoomWindowEl(el) {
+    const p = el && el.parentElement;
+    return p && p.classList.contains('xmr-fullimg-wrap') ? p : el;
+  }
+
+  // 【実機フィードバック】「ズームすると元の画像の枠の中でしか見えない。
+  // 画面全部を使うべきでは？」——その通りで、窓が画像のサイズ（縦長の絵なら
+  // 細い縦長）のままだったため、周りが黒く余っているのに狭い窓を覗いている
+  // 状態だった。拡大中だけ窓を画面いっぱいに広げ、キャプションは畳む。
+  // 窓が広がると画像の版面上の位置（flexの中央寄せ）も動くので、切り替えの
+  // 前後で実際の表示位置がずれないよう、その差分を平行移動量から打ち消す。
+  function syncZoomWindow(el) {
+    const wrap = el && el.parentElement;
+    if (!wrap || !wrap.classList.contains('xmr-fullimg-wrap')) return;
+    const layout = wrap.parentElement;
+    if (!layout || !layout.classList.contains('xmr-viewer-layout')) return;
+    const want = Zoom.scale > ZOOM_MIN;
+    if (layout.classList.contains('xmr-zoomed') === want) return;
+    const before = el.getBoundingClientRect();
+    layout.classList.toggle('xmr-zoomed', want);
+    const after = el.getBoundingClientRect(); // ここで再レイアウトが確定する
+    Zoom.x -= after.left - before.left;
+    Zoom.y -= after.top - before.top;
+  }
+
   function zoomApply() {
     const el = Zoom.el;
     if (!el) return;
+    syncZoomWindow(el);
     if (Zoom.scale <= ZOOM_MIN) {
       el.style.transform = '';
       el.style.cursor = 'zoom-in';
     } else {
+      zoomClamp(); // 窓の大きさが変わった直後でも正しい範囲に収める
       el.style.transform = 'translate(' + Zoom.x + 'px,' + Zoom.y + 'px) scale(' + Zoom.scale + ')';
       el.style.cursor = Zoom.dragging ? 'grabbing' : 'grab';
     }
   }
 
-  // 拡大した画像が元の枠を覆ったままになるように平行移動量を制限する
-  // （画面外へ飛ばして「画像が消えた」状態にしないため）。
+  // 拡大した画像が窓を覆ったままになるように平行移動量を制限する
+  // （画面外へ飛ばして「画像が消えた」状態にしないため）。窓より小さい時は
+  // 中央に置く（拡大中は窓＝画面なので、低倍率では中央に浮く形になる）。
   function zoomClamp() {
     const el = Zoom.el;
     if (!el || Zoom.scale <= ZOOM_MIN) return;
     const bw = el.offsetWidth;
     const bh = el.offsetHeight;
-    Zoom.x = Math.min(0, Math.max(bw - bw * Zoom.scale, Zoom.x));
-    Zoom.y = Math.min(0, Math.max(bh - bh * Zoom.scale, Zoom.y));
+    const win = zoomWindowEl(el);
+    const vw = win.clientWidth || bw;
+    const vh = win.clientHeight || bh;
+    // 画像は窓の中で中央寄せされているので、その分だけ原点がずれている
+    const offX = (vw - bw) / 2;
+    const offY = (vh - bh) / 2;
+    const sw = bw * Zoom.scale;
+    const sh = bh * Zoom.scale;
+    if (sw >= vw) Zoom.x = Math.min(-offX, Math.max(vw - sw - offX, Zoom.x));
+    else Zoom.x = (vw - sw) / 2 - offX;
+    if (sh >= vh) Zoom.y = Math.min(-offY, Math.max(vh - sh - offY, Zoom.y));
+    else Zoom.y = (vh - sh) / 2 - offY;
   }
 
   // clientX/Yを省くと画像の中央を基準に拡大する（キー操作はこちら）。
@@ -1728,18 +1851,26 @@
   function zoomBindPointer(el) {
     let downX = 0;
     let downY = 0;
-    let baseX = 0;
-    let baseY = 0;
+    // 直前のpointermoveの位置。移動量は「押した場所からの絶対差」ではなく
+    // 「前回からの差分」で積む。
+    // 【実機報告のバグ修正】以前は押した時点のZoom.x/yをbaseX/baseYに控え、
+    // 毎回 Zoom.x = baseX + (今の位置 - 押した位置) で計算していた。左ボタンを
+    // 押したままホイールで拡大すると、zoomSet()がZoom.x/yを書き換えるのに
+    // baseX/baseYは押した時のままなので、そこからほんの少しでもマウスを
+    // 動かした瞬間に**拡大で動いた分がまるごと巻き戻り、大きく飛ぶ**。
+    // 倍率で変わるzoomPanFactor()も古い値のまま掛かるのでズレが増幅される。
+    // 差分方式なら、途中で誰がZoom.x/yを変えても（ホイール拡大・キー操作の
+    // どちらでも）その結果の上に続きを積むだけなので破綻しない。
+    let lastX = 0;
+    let lastY = 0;
     let moved = 0;
     let active = false;
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       active = true;
       moved = 0;
-      downX = e.clientX;
-      downY = e.clientY;
-      baseX = Zoom.x;
-      baseY = Zoom.y;
+      downX = lastX = e.clientX;
+      downY = lastY = e.clientY;
       zoomAttach(el);
       try {
         el.setPointerCapture(e.pointerId);
@@ -1747,17 +1878,21 @@
     });
     el.addEventListener('pointermove', (e) => {
       if (!active) return;
-      const dx = e.clientX - downX;
-      const dy = e.clientY - downY;
-      moved = Math.max(moved, Math.abs(dx) + Math.abs(dy));
+      // クリックかドラッグかの判定は今まで通り「押した場所からどれだけ
+      // 離れたか」で見る（経路長で見ると手ブレでクリックが取りこぼされる）。
+      moved = Math.max(moved, Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY));
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
       if (Zoom.scale <= ZOOM_MIN || moved < 5) return;
       Zoom.dragging = true;
       // 等倍と同じ1:1でドラッグすると、拡大するほど端まで行くのに何回も
       // 持ち替えが要る（実機報告：移動幅が小さい）。倍率に応じて移動量を
       // 増やす。scaleそのままだと8倍で行き過ぎるので平方根にして上限3。
       const pf = zoomPanFactor();
-      Zoom.x = baseX + dx * pf;
-      Zoom.y = baseY + dy * pf;
+      Zoom.x += dx * pf;
+      Zoom.y += dy * pf;
       zoomClamp();
       zoomApply();
     });
@@ -1805,6 +1940,23 @@
       // 画像モーダル(#layers)に見つかったらそれが今見ているもの。下は見ない。
       if (best) break;
     }
+    if (best) return best.src;
+    // 【実機報告「Xの画像モーダルで拡大キーが効かない」の対策】
+    // 上は「画面上での実寸が80px以上」を条件にしている。ところがXのモーダルの
+    // <img>は、実測すると版面上の大きさが0×0になっていることがあった
+    // （読み込みは完了していてnaturalWidthは2717あるのに、要素の矩形は0）。
+    // 条件に外れるとsrcが1つも取れず、拡大キーが黙って何もしない状態になる。
+    // 版面の大きさが当てにならない時のために、読み込み済みで元画像が十分
+    // 大きいものを素直に選ぶ経路を足しておく（アバターや絵文字は小さいので
+    // naturalWidthの下限で落ちる）。
+    for (const scope of scopes) {
+      for (const im of scope.querySelectorAll('img')) {
+        if (!/pbs\.twimg\.com\/media\//.test(im.src || '')) continue;
+        if (!im.complete || im.naturalWidth < 400) continue;
+        if (!best || im.naturalWidth > best.area) best = { src: im.src, area: im.naturalWidth };
+      }
+      if (best) break;
+    }
     return best ? best.src : null;
   }
 
@@ -1837,6 +1989,9 @@
         if (e.target === ov) closeZoomOverlay();
       });
       zoomBindPointer(im);
+      // 画像の外側でホイールを回した時に、裏のページが動いてしまうのを止める
+      // （拡大表示を見ている最中に背景が動くのは事故のもと）。
+      ov.addEventListener('wheel', (e) => e.preventDefault(), { passive: false });
       document.body.appendChild(ov);
     }
     const im = ov.querySelector('.xmr-zoomov-img');
@@ -2459,10 +2614,14 @@
     if (openMedia) {
       const author = tweetAuthorFromHref(entry.href);
       if (!author) return;
-      // 行き先は設定(fTarget)で選択：プロフィール（デフォルト）かメディア欄。
+      // 行き先は設定(fDirectMedia)で選択：プロフィール（既定）かメディア欄。
       // SPA遷移では新規タブ時代の#xmr-freshリロードは不要（あれは初回
       // ロード時のXのスクロール復元スナップショット問題への対策だった）。
-      if (Settings.fTarget === 'media') {
+      if (Settings.fDirectMedia) {
+        // 直前にポストタブを押していても、Fでメディアへ行くと本人が言って
+        // いるのだからその猶予は捨てる（残っているとautoRedirectMediaPhoto()
+        // にポストへ押し戻され「メディアに行けない」状態になる）。
+        postsTabIntentUntil = 0;
         // ?filter=photoへ直接行くことでリダイレクトの一往復も省く
         xmrSpaNavigate('/' + author + '/media?filter=photo');
       } else {
@@ -3293,8 +3452,10 @@
           })());
       swallowKey(e); // 飛べない場合でもXのショートカットには渡さない
       if (author) {
+        // openEntrySameTab()と同じ理由でポスト意思の猶予を捨てる
+        if (Settings.fDirectMedia) postsTabIntentUntil = 0;
         xmrSpaNavigate(
-          Settings.fTarget === 'media' ? '/' + author + '/media?filter=photo' : '/' + author
+          Settings.fDirectMedia ? '/' + author + '/media?filter=photo' : '/' + author
         );
       }
       return;
@@ -5005,7 +5166,22 @@
       }
     }
 
-    const tablist = primaryForTablist && primaryForTablist.querySelector('[role="tablist"]');
+    // 【実機で再現したバグ】プロフィールからホームへ「戻る」で帰ってくると、
+    // タブバーが「ポスト/返信/リポスト/メディア」＝直前に見ていたアカウントの
+    // タブのまま出ていた。戻り時はスナップショットからグリッドを即座に
+    // 組み直すので、Xがホームのタブ一覧を描き直すより先にこの行へ届き、
+    // まだ残っている前のページのタブ一覧を掴んでしまう。掴む相手を間違えると
+    // タブバーの中身も飛び先も前のページのままになり、しかもクリックは既に
+    // 外れた要素へのclick()委譲なので何も起きない＝ホームのタブを切り替える
+    // 手段がタブバーから失われる。
+    // 見分け方はisHomeStyleTablist()（ホームのタブだけURLを持たない）。
+    // ここで待つ選択はしない：実機計測では、戻ってからXがホームのタブ一覧に
+    // 差し替えるまで7.3秒かかった。戻り復元の速さ（このプロジェクトが
+    // 660msまで詰めたもの）をタブバーのために捨てるのは本末転倒なので、
+    // 「合わないタブ一覧は掴まない」だけをここで決め、ホームのタブバーは
+    // 正しいタブ一覧が現れた時点で後から埋める（下のwatchHomeTabbar）。
+    let tablist = primaryForTablist && primaryForTablist.querySelector('[role="tablist"]');
+    if (mode === 'home' && !isHomeStyleTablist(tablist)) tablist = null;
     let extraTabs = [];
     let homeTabs = [];
     if (tablist && !tablist.contains(sourceRoot)) {
@@ -5322,7 +5498,30 @@
           // プロフィール直下（＝ポストタブ）を選んだら、その直後だけ画像表示
           // への自動転送を止める。ポストと画像は別物であり、押した先を勝手に
           // すり替えないという方針をここで担保する。
-          if (/^\/[^/]+\/?$/.test(normHref(tb.href))) postsTabIntentUntil = Date.now() + 4000;
+          // 【実機報告「ポストに戻った後メディアに行くとポストに戻される・
+          // メディアに行けない」の修正】判定にnormHref（search/hash込み）を
+          // 使っていたため、「画像」ピルの行き先`/USER#xmrimg`まで
+          // `^\/[^/]+\/?$`にマッチし、**画像タブを押しただけでポスト意思の
+          // 猶予4秒が立っていた**。その4秒の間にメディア（動画/画像タブ）へ
+          // 行くと引き戻されるので、続けて操作するほど「メディアに行けない」
+          // ことになる。パスだけで判定する。
+          // ※「画像」ピルの行き先はautoActionableがONだと`/USER#xmrimg`＝
+          //   パスはポストタブと同じで、印はhashにしかない（v3.97.0）。
+          //   よってパスだけでも足りず、hash/searchが無い素の`/USER`だけを
+          //   ポストタブと見なす必要がある。
+          let tbUrl = null;
+          try {
+            tbUrl = new URL(tb.href, location.origin);
+          } catch (err) {}
+          const tbPath = tbUrl ? tbUrl.pathname.replace(/\/$/, '') : '';
+          const isBareProfile = !!tbUrl && /^\/[^/]+$/.test(tbPath) && !tbUrl.hash && !tbUrl.search;
+          if (isBareProfile) armPostsTabIntent();
+          // 逆に、メディア側（Xのメディアタブ／自前の画像・動画ピル）を押したのは
+          // 「メディアを見たい」という直近の意思表示なので、残っているポスト意思の
+          // 猶予は捨てる（古い猶予に新しい操作が負ける状態を作らない）。
+          else if (/^\/[^/]+\/media$/.test(tbPath) || (tbUrl && tbUrl.hash === XMR_IMAGES_HASH)) {
+            postsTabIntentUntil = 0;
+          }
           // クリックしたボタンにフォーカスが残ると、ブラウザ標準の枠線が
           // 付いたままになる。青い下線（アクティブ表示）と並ぶと「2つ選択
           // されている」ように見えるため外す（実機報告：どっち開いてるの？）。
@@ -5342,15 +5541,45 @@
     // ホームのタブ切替。押すと本物のタブ要素へclick()を委譲するだけなので、
     // 「おすすめ」以外を押すとensureHomeTabObserver()が検知して自動で
     // グリッドを解除し、本物のタイムライン表示に切り替わる。
-    if (homeTabs.length > 0) {
+    if (mode === 'home') {
       tabbarEl = document.createElement('div');
       tabbarEl.className = 'xmr-tabbar';
-      homeTabs.forEach((tb, i) => {
-        const btn = mkXTab(tb.text, tb.selected);
-        btn.dataset.xmrHomeIdx = String(i);
-        btn.addEventListener('click', () => tb.el.click());
-        tabbarEl.appendChild(btn);
-      });
+      const fillHomeTabbar = (tl) => {
+        tabbarEl.textContent = '';
+        [...tl.querySelectorAll('[role="tab"]')].forEach((el, i) => {
+          const btn = mkXTab(el.textContent.trim(), el.getAttribute('aria-selected') === 'true');
+          btn.dataset.xmrHomeIdx = String(i);
+          btn.addEventListener('click', () => el.click());
+          tabbarEl.appendChild(btn);
+        });
+        tl.classList.add('xmr-tablist-hide');
+      };
+      if (homeTabs.length > 0) {
+        // 既に正しいタブ一覧を掴めている（＝通常のホーム表示）
+        homeTabs.forEach((tb, i) => {
+          const btn = mkXTab(tb.text, tb.selected);
+          btn.dataset.xmrHomeIdx = String(i);
+          btn.addEventListener('click', () => tb.el.click());
+          tabbarEl.appendChild(btn);
+        });
+      } else {
+        // 前のページのタブ一覧しか無い（＝プロフィールから戻ってきた直後）。
+        // 空のタブバーだけ先に置いて場所を確保し、Xがホームのタブ一覧に
+        // 差し替えた時点で中身を入れる。実機計測で差し替えまで7.3秒
+        // かかったことがあるので、待ち時間は長めに取る。
+        waitFor(() => {
+          const p = document.querySelector('[data-testid="primaryColumn"]');
+          const tl = p && p.querySelector('[role="tablist"]');
+          return isHomeStyleTablist(tl) ? tl : null;
+        }, 30000, 150).then((tl) => {
+          if (!tl || token !== Grid.navToken || currentGridMode() !== 'home') return;
+          if (!tabbarEl.isConnected) return;
+          fillHomeTabbar(tl);
+          // 監視先も新しいタブ一覧へ張り替える（古い方を見張ったままだと
+          // ホームのタブ切替を二度と検知できない）。
+          ensureHomeTabObserver();
+        });
+      }
     }
     // 右サイドバーを常時隠す設定(hideSidebar)にしている人でも、検索したい
     // 時だけ一時的にサイドバーを出して検索ボックスへ自動フォーカスする
@@ -5782,6 +6011,81 @@
       autoFocusStatusPage();
     }
   }
+
+  // 【実機報告「Xの画像モーダル（画像をクリックして開く標準の表示）で拡大が
+  // できない」】上のキー処理はdocumentのバブル段階で拾っているため、モーダル側が
+  // stopPropagation()していると届かない可能性がある。モーダルが開いている時
+  // だけ、キャプチャ段階にも同じ入口を用意しておく。範囲は絞る：拡大キー1つ、
+  // 画像モーダルが開いている時だけ、入力欄にフォーカスがある時は何もしない。
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      if (Grid.active) return;
+      // 【実機確認】自前の拡大表示を開いている時にEscを押すと、こちらが閉じる
+      // 前にXのモーダルも一緒に閉じて（履歴が戻って）しまった。バブル段階で
+      // 拾っていてはXのハンドラの方が先に走るため。開いている間の操作は
+      // キャプチャ段階で確定させ、Xには渡さない。
+      if (zoomOverlayOpen()) {
+        if (!e.key) return;
+        const zk = e.key.toLowerCase();
+        if (zk === Settings.keys.openClose || e.key === 'Escape') {
+          swallowKey(e);
+          closeZoomOverlay();
+        } else if (isZoomKey(zk)) {
+          swallowKey(e);
+          zoomStepKey(zk);
+        }
+        return;
+      }
+      if (Grid.overlay && Grid.overlay.classList.contains('xmr-open')) return;
+      if (!e.key || e.key.toLowerCase() !== Settings.keys.zoomIn) return;
+      if (isTypingTarget(e.target)) return;
+      const layers = document.getElementById('layers');
+      if (!layers || !layers.querySelector('[data-testid="swipe-to-dismiss"]')) return;
+      const src = pageZoomImageSrc();
+      if (!src) return;
+      swallowKey(e);
+      openZoomOverlay(src);
+    },
+    true
+  );
+
+  // 【実機報告「通常の開き方で画像を開くと、ホイールで裏だけ動いて肝心の画像は
+  // 拡大できない」】Xの画像モーダルにはホイール拡大が無く、回すと裏のページが
+  // 動く。この拡張の売りは「開き直さずにその場で拡大」なので、モーダルの画像の
+  // 上でホイールを回したら、裏を動かす代わりに自前の拡大表示へ引き取る。
+  // 右側の返信一覧の上では従来どおりスクロールさせる（画像の領域=
+  // swipe-to-dismiss の中だけを対象にする）。
+  document.addEventListener(
+    'wheel',
+    (e) => {
+      if (Grid.active || zoomOverlayOpen()) return;
+      if (Grid.overlay && Grid.overlay.classList.contains('xmr-open')) return;
+      const layers = document.getElementById('layers');
+      const area = layers && layers.querySelector('[data-testid="swipe-to-dismiss"]');
+      if (!area || !area.contains(e.target)) return;
+      const src = pageZoomImageSrc();
+      if (!src) return;
+      e.preventDefault();
+      openZoomOverlay(src);
+      // 開いた直後の1回分もそのまま効かせる（ホイールを回した本人の意図は
+      // 「今この位置で拡大したい」なので、指した点を基準に1段階進める）。
+      const im = zoomOverlayEl() && zoomOverlayEl().querySelector('.xmr-zoomov-img');
+      if (im && e.deltaY < 0) {
+        const cx = e.clientX;
+        const cy = e.clientY;
+        // srcを差し替えた直後は実寸が未確定（0）で、その状態で倍率を計算すると
+        // 指した点を基準にできない。描画が決まってから1段階進める。
+        const step = () => {
+          zoomAttach(im);
+          zoomSet(Zoom.scale * ZOOM_STEP, cx, cy);
+        };
+        if (im.complete && im.naturalWidth) requestAnimationFrame(step);
+        else im.addEventListener('load', () => requestAnimationFrame(step), { once: true });
+      }
+    },
+    { passive: false, capture: true }
+  );
 
   onUrlChange(onNavigate);
 

@@ -700,6 +700,18 @@ html.xmr-light {
   min-width: min(40vw, 320px);
 }
 .xmr-viewer-caption {
+  /* 【実機フィードバック「1枚の画像なら真ん中に置いてほしい」】
+     以前は画像とキャプションを1つの塊として中央寄せしていたため、画像自体は
+     キャプションの幅の分だけ左にずれていた。画像が主役なので、キャプションを
+     版面から外して画面の右端に浮かせ、画像だけを中央に置く。
+     ※釣り合い用の透明な余白を左に入れる案は不採用。flex-shrinkを持つ空要素は
+       フレックスコンテナの内在幅の計算に寄与しないため（実測：280px指定でも
+       5pxまで潰れた）、shrinkを0にする以外に効かせる方法が無く、それをすると
+       狭いウィンドウで画像の方が縮む。位置指定で外す方が副作用が無い。 */
+  position: fixed;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
   /* 幅700px前後の狭いウィンドウで画像と合わせてはみ出さないよう、
      固定280pxではなくビューポート幅に応じて縮む上限付きにする */
   width: min(280px, 35vw);
@@ -767,11 +779,18 @@ html.xmr-compose-open .xmr-shell {
 /* 拡大表示のキャプション内：いいね/ブックマーク/リプライの可視ボタン列 */
 .xmr-viewer-actions {
   display: flex;
+  /* 【実機で発見】4つのボタンを1行に並べると、キャプション幅(最大280px)に
+     日本語ラベル（♥いいね/🔖ブックマーク/🔁リポスト/💬返信）が収まらず、
+     4つ目の「返信」が右端で見切れて横スクロールバーが出ていた。
+     white-space:nowrapのボタンは幅を割り込めないので、行内で詰めるのでは
+     なく折り返して2段にする。 */
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
 }
 .xmr-viewer-action-btn {
-  flex: 1;
+  /* 2つで1行（gap 8pxの半分を引く）。3つ以下なら最後の1つが伸びて埋まる */
+  flex: 1 1 calc(50% - 4px);
   background: rgba(239, 243, 244, 0.08);
   border: 1px solid rgba(239, 243, 244, 0.2);
   color: rgb(231, 233, 234);
@@ -1236,6 +1255,26 @@ html.xmr-actions-on-focus .xmr-tile.xmr-selected .xmr-tile-actions {
   min-width: 0;
   max-width: 70vw;
   max-height: 90vh;
+}
+
+/* 【実機フィードバック「ズームしても元の画像の枠の中でしか見えない」】
+   覗き窓(.xmr-fullimg-wrap)が画像と同じ大きさしか無いため、縦長の絵だと
+   細い縦長の窓を覗く形になり、周りの黒い余白が丸ごと無駄になっていた。
+   拡大中(scale>1)だけ窓を画面いっぱいに広げ、キャプションは畳んで
+   画面全部を画像に使う。等倍に戻せば元のレイアウトに戻る。 */
+.xmr-viewer-layout.xmr-zoomed {
+  gap: 0;
+  max-width: 100vw;
+  max-height: 100vh;
+}
+.xmr-viewer-layout.xmr-zoomed .xmr-viewer-caption {
+  display: none;
+}
+.xmr-viewer-layout.xmr-zoomed .xmr-fullimg-wrap {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
 }
 
 /* ツールバーに出す自前の検索入力欄。検索結果ページのようにXの検索欄が

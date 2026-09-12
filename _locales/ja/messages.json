@@ -405,17 +405,11 @@
       }
     }
   },
-  "optFTargetLabel": {
-    "message": "Fキー（投稿者ページ）の行き先"
+  "optFDirectMediaLabel": {
+    "message": "Fキーでアカウントのメディア欄に直接飛ぶ"
   },
-  "optFTargetProfile": {
-    "message": "プロフィール（ポスト一覧）"
-  },
-  "optFTargetMedia": {
-    "message": "メディア欄（画像一覧）"
-  },
-  "optFTargetDesc": {
-    "message": "初期値：プロフィール（ポスト一覧）。画像だけを追いたい人は「メディア欄」に変更してください。"
+  "optFDirectMediaDesc": {
+    "message": "初期値：オフ（Fキーはプロフィール＝ポスト一覧へ飛びます）。オンにするとその投稿者のメディア欄へ直行します。画像と動画のどちらを開くかは下の「メディア欄を開いたら画像を優先して表示」で決まります。"
   },
   "optAccentLabel": {
     "message": "アクセント色"

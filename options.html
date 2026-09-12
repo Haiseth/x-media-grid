@@ -71,14 +71,6 @@
     padding: 3px 0;
     text-transform: lowercase;
   }
-  .xmr-ftarget-select {
-    background: rgba(239, 243, 244, 0.08);
-    color: rgb(231, 233, 234);
-    border: 1px solid rgba(239, 243, 244, 0.2);
-    border-radius: 4px;
-    padding: 3px 6px;
-    font-size: 12px;
-  }
   .xmr-color-cell {
     display: flex;
     flex-direction: column;
@@ -191,15 +183,13 @@
     </span>
   </label>
   <label class="xmr-row">
-    <select id="fTarget" class="xmr-ftarget-select">
-      <option value="profile" data-i18n="optFTargetProfile">プロフィール（ポスト一覧）</option>
-      <option value="media" data-i18n="optFTargetMedia">メディア欄（画像一覧）</option>
-    </select>
+    <input type="checkbox" id="fDirectMedia">
     <span>
-      <span class="xmr-row-text" data-i18n="optFTargetLabel">Fキー（投稿者ページ）の行き先</span>
-      <span class="xmr-row-desc" data-i18n="optFTargetDesc">
-        初期値：プロフィール（ポスト一覧）。画像だけを追いたい人は
-        「メディア欄」に変更してください。
+      <span class="xmr-row-text" data-i18n="optFDirectMediaLabel">Fキーでアカウントのメディア欄に直接飛ぶ</span>
+      <span class="xmr-row-desc" data-i18n="optFDirectMediaDesc">
+        初期値：オフ（Fキーはプロフィール＝ポスト一覧へ飛びます）。オンにすると
+        その投稿者のメディア欄へ直行します。画像と動画のどちらを開くかは下の
+        「メディア欄を開いたら画像を優先して表示」で決まります。
       </span>
     </span>
   </label>

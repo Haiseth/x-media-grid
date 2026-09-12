@@ -122,7 +122,7 @@ function saveSettings(partial) {
 const hideSidebarEl = document.getElementById('hideSidebar');
 const tileActionsEl = document.getElementById('tileActions');
 const actionsOnFocusEl = document.getElementById('actionsOnFocus');
-const fTargetEl = document.getElementById('fTarget');
+const fDirectMediaEl = document.getElementById('fDirectMedia');
 const newPostsBannerEl = document.getElementById('newPostsBanner');
 const photoFirstEl = document.getElementById('photoFirst');
 const autoActionableEl = document.getElementById('autoActionable');
@@ -132,7 +132,8 @@ loadSettings((s) => {
   hideSidebarEl.checked = s.hideSidebar === true; // デフォルトOFF（サイドバーは隠さない）
   tileActionsEl.checked = s.tileActions !== false; // デフォルトON（ホバーで操作ボタンを出す）
   actionsOnFocusEl.checked = s.actionsOnFocus !== false; // デフォルトON
-  fTargetEl.value = s.fTarget === 'media' ? 'media' : 'profile'; // デフォルトはプロフィール
+  // 旧設定fTarget（選択式）からの移行。新しいfDirectMediaがあればそちらを優先。
+  fDirectMediaEl.checked = typeof s.fDirectMedia === 'boolean' ? s.fDirectMedia : s.fTarget === 'media'; // デフォルトOFF（プロフィールへ飛ぶ）
   newPostsBannerEl.checked = s.newPostsBanner !== false; // デフォルトON
   photoFirstEl.checked = s.photoFirst !== false; // デフォルトON（画像側を優先して開く）
   autoActionableEl.checked = s.autoActionable !== false; // デフォルトON
@@ -144,8 +145,9 @@ photoFirstEl.addEventListener('change', () => saveSettings({ photoFirst: photoFi
 autoActionableEl.addEventListener('change', () => saveSettings({ autoActionable: autoActionableEl.checked }));
 hideHomeDotEl.addEventListener('change', () => saveSettings({ hideHomeDot: hideHomeDotEl.checked }));
 hideNotifBadgeEl.addEventListener('change', () => saveSettings({ hideNotifBadge: hideNotifBadgeEl.checked }));
-fTargetEl.addEventListener('change', () => {
-  saveSettings({ fTarget: fTargetEl.value === 'media' ? 'media' : 'profile' });
+fDirectMediaEl.addEventListener('change', () => {
+  // 旧キーも一緒に書き換えておく（古いバージョンに戻した時に食い違わないように）
+  saveSettings({ fDirectMedia: fDirectMediaEl.checked, fTarget: fDirectMediaEl.checked ? 'media' : 'profile' });
 });
 
 // ---- 色カスタマイズ ----

@@ -405,17 +405,11 @@
       }
     }
   },
-  "optFTargetLabel": {
-    "message": "Destination of the author-page key (F)"
+  "optFDirectMediaLabel": {
+    "message": "Jump straight to the account's media tab with F"
   },
-  "optFTargetProfile": {
-    "message": "Profile (posts)"
-  },
-  "optFTargetMedia": {
-    "message": "Media tab (photos)"
-  },
-  "optFTargetDesc": {
-    "message": "Default: profile. Choose \"Media tab\" to jump straight to their photos."
+  "optFDirectMediaDesc": {
+    "message": "Default: off (F opens their profile, i.e. posts). Turn it on to land on their media tab instead. Whether photos or videos open is decided by \"Show photos first when opening the media tab\" below."
   },
   "optAccentLabel": {
     "message": "Accent color"
