@@ -578,14 +578,16 @@
   }
 
   // ============================================================
-  // 診断記録（v4.6.5）
+  // 診断記録（v4.6.5で追加、v4.6.6で縮小）
   // 実機報告「Xを裏に置いて戻ると、クリックもキーも効かなくなる」の調査用。
-  // 実機で起きた時の記録では、戻った直後にグリッドの画像の上でマウスボタンを
-  // 押したのが最後に届いた入力で、それ以降はクリック・キー・ホバー・Chrome自身の
-  // 右クリックメニューまで止まり、スクロールだけが効いた。原因は未確定。
-  // 普段のタブで起きた時の直前の入力・処理の詰まり・グリッドの作り直しを、
-  // この端末のlocalStorageにだけ残す（外部送信なし。投稿の中身・URL・打った
-  // 文字は記録しない）。動作は何も変えない。
+  // 原因は「始まったのに終わらなかったドラッグ」で確定した（下のdragstartの
+  // コメント参照）。原因が割れるまでは入力全般（クリック・キー・右クリック）を
+  // 記録していたが、**不具合の判別にはドラッグの開始と終了だけで足りる**
+  // （dragstartが来てdragendが来ない＝発生）ので、v4.6.6で入力の監視は外した。
+  // 残すのは、ドラッグの開始/終了/ドロップと阻止、タブの表示切替、ウィンドウの
+  // 出入り、0.2秒以上の処理の詰まり、グリッドの作り直しだけ。
+  // 記録先はこの端末のlocalStorageのみ（外部送信なし。投稿の中身・URL・
+  // 打った文字は記録しない）。動作は何も変えない。
   // ============================================================
   const DIAG_KEY = 'xmr-diag';
   const DIAG_MAX = 300;
@@ -623,14 +625,12 @@
     const cls = own ? String(own.className).split(' ').find((c) => c.startsWith('xmr-')) || '' : '';
     return el.tagName + (cls ? '@' + cls : '');
   }
-  ['pointerdown', 'mousedown', 'click', 'contextmenu', 'keydown', 'dragstart', 'dragend', 'drop'].forEach((t) => {
+  ['dragstart', 'dragend', 'drop'].forEach((t) => {
     window.addEventListener(
       t,
       (e) => {
         if (!e.isTrusted) return;
-        // 打った文字そのものは残さない（届いたかどうかだけ分かればよい）
-        const detail = t === 'keydown' ? (e.key && e.key.length === 1 ? 'char' : e.key) : diagTarget(e.target);
-        diag(t, detail);
+        diag(t, diagTarget(e.target));
       },
       { capture: true, passive: true }
     );
