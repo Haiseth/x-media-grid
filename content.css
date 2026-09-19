@@ -1294,3 +1294,14 @@ html.xmr-light .xmr-toolbar input.xmr-tb-searchbox {
   color: rgb(15, 20, 25);
   background: rgba(15, 20, 25, 0.06);
 }
+
+/* 【v4.6.6】ページ全体で画像・リンクのドラッグを始めさせない。
+   終わらなかったドラッグが残るとタブが一切の入力を受け付けなくなる
+   （実機の診断記録で2回一致。理由はcontent.jsのdragstart側のコメント）。
+   v4.6.5ではグリッドの中だけを止めたが、2回目はXの素の<a>で起きた。
+   dragstartのpreventDefaultだけでも止まるが、こちらがあると掴んだ瞬間の
+   半透明の複製が出ないので、ドラッグが始まりかけたことにも気づかない。 */
+img,
+a {
+  -webkit-user-drag: none;
+}

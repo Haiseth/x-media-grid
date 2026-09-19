@@ -577,6 +577,109 @@
     return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
   }
 
+  // ============================================================
+  // 診断記録（v4.6.5）
+  // 実機報告「Xを裏に置いて戻ると、クリックもキーも効かなくなる」の調査用。
+  // 実機で起きた時の記録では、戻った直後にグリッドの画像の上でマウスボタンを
+  // 押したのが最後に届いた入力で、それ以降はクリック・キー・ホバー・Chrome自身の
+  // 右クリックメニューまで止まり、スクロールだけが効いた。原因は未確定。
+  // 普段のタブで起きた時の直前の入力・処理の詰まり・グリッドの作り直しを、
+  // この端末のlocalStorageにだけ残す（外部送信なし。投稿の中身・URL・打った
+  // 文字は記録しない）。動作は何も変えない。
+  // ============================================================
+  const DIAG_KEY = 'xmr-diag';
+  const DIAG_MAX = 300;
+  let diagBuf = null;
+  let diagSaveTimer = null;
+  function diag(type, detail) {
+    try {
+      if (!diagBuf) {
+        try {
+          diagBuf = JSON.parse(localStorage.getItem(DIAG_KEY) || '[]');
+        } catch (e) {
+          diagBuf = [];
+        }
+        if (!Array.isArray(diagBuf)) diagBuf = [];
+      }
+      diagBuf.push(detail === undefined ? [Date.now(), type] : [Date.now(), type, detail]);
+      if (diagBuf.length > DIAG_MAX) diagBuf.splice(0, diagBuf.length - DIAG_MAX);
+      if (!diagSaveTimer) {
+        diagSaveTimer = setTimeout(() => {
+          diagSaveTimer = null;
+          try {
+            localStorage.setItem(DIAG_KEY, JSON.stringify(diagBuf));
+          } catch (e) {}
+        }, 1500);
+      }
+    } catch (e) {}
+  }
+  function diagTarget(el) {
+    if (!el || !el.tagName) return '';
+    // 【v4.6.6】htmlにはxmr-hide-notif-badge等の設定クラスが付くので、そこまで
+    // 遡ると「Xの素の要素」まで拡張の要素に見えてしまう（v4.6.5の記録を一度
+    // 読み違えた原因）。html/bodyは見ない。
+    let own = el.closest && el.closest('[class*="xmr-"]');
+    if (own === document.documentElement || own === document.body) own = null;
+    const cls = own ? String(own.className).split(' ').find((c) => c.startsWith('xmr-')) || '' : '';
+    return el.tagName + (cls ? '@' + cls : '');
+  }
+  ['pointerdown', 'mousedown', 'click', 'contextmenu', 'keydown', 'dragstart', 'dragend', 'drop'].forEach((t) => {
+    window.addEventListener(
+      t,
+      (e) => {
+        if (!e.isTrusted) return;
+        // 打った文字そのものは残さない（届いたかどうかだけ分かればよい）
+        const detail = t === 'keydown' ? (e.key && e.key.length === 1 ? 'char' : e.key) : diagTarget(e.target);
+        diag(t, detail);
+      },
+      { capture: true, passive: true }
+    );
+  });
+  document.addEventListener('visibilitychange', () => diag('vis', document.visibilityState), true);
+  window.addEventListener('focus', (e) => {
+    if (e.target === window) diag('focus');
+  }, true);
+  window.addEventListener('blur', (e) => {
+    if (e.target === window) diag('blur');
+  }, true);
+  try {
+    new PerformanceObserver((list) => {
+      for (const en of list.getEntries()) if (en.duration >= 200) diag('longtask', Math.round(en.duration));
+    }).observe({ type: 'longtask' });
+  } catch (e) {}
+
+  // 【v4.6.6・実機の記録で2回一致】このページではドラッグを始めさせない。
+  //
+  // 実機報告「裏に置いて戻るとクリックもキーも効かなくなる」の正体は、
+  // 「始まったのに終わらなかったドラッグ」。ドラッグ中のブラウザは、本物の
+  // 入力をページへ渡さずドラッグ操作として扱う（合成スクロールだけは別経路
+  // なので効き、JavaScriptから送ったイベントはページ内で普通に動く）。
+  // 終わらないまま取り残されると、その状態から戻れない＝報告どおりの
+  // 「クリックもキーも右クリックメニューも効かないが、スクロールはできる」。
+  //
+  // 診断記録での一致：
+  //   ・v4.6.5時点：グリッドのタイル画像でdragstart→dragend無し→以後入力ゼロ。
+  //   ・v4.6.6時点：グリッド解除の0.5秒後、Xの素の<a>でdragstart→同上。
+  // どちらも直前にXが大きく描画し直している最中で、掴んだ要素がその場で
+  // 作り直されている。v4.6.5ではグリッド内だけを止めたので2回目は素通りした。
+  // 掴む対象を選り分ける意味は無いので、ページ全体で止める。
+  //
+  // 通すのは入力欄・本文編集欄の中から始まるドラッグだけ（返信欄で選んだ文字を
+  // 動かす操作）。ページの外から画像をドロップしてくる操作はdragstartを
+  // 伴わないので影響しない。画像やリンクをXの外へ引っぱり出す操作はできなく
+  // なるが、タブが操作不能になる方が損害が大きい。
+  window.addEventListener(
+    'dragstart',
+    (e) => {
+      const t = e.target;
+      const el = t && t.nodeType === 1 ? t : t && t.parentElement;
+      if (el && el.closest && el.closest('input, textarea, [contenteditable="true"]')) return;
+      e.preventDefault();
+      diag('drag-blocked', diagTarget(el));
+    },
+    true
+  );
+
   function waitFor(checkFn, timeoutMs, intervalMs) {
     return new Promise((resolve) => {
       // 【実機計測で判明した遅延の主因】以前は必ずsetIntervalの1周期目を
@@ -1270,6 +1373,12 @@
   }
   let homeTabObserver = null;
   let homeTabObserverTarget = null;
+  // 【フリーズ対策（v4.6.4）】ensureHomeTabObserver()は全体監視のbodyObserverから
+  // DOMが変わるたびに呼ばれる。v4.5.0で「ホームのタブ一覧でなければ待つ」ように
+  // したため、プロフィールから戻った直後（Xがタブ一覧を差し替えるまで実測7秒）は
+  // 変化のたびに新しい待ち(100ms毎のポーリングを3秒)が積み上がり、数百本の
+  // タイマーが同時に回っていた。待ちは同時に1本だけにする。
+  let homeTabWaitInFlight = false;
   async function ensureHomeTabObserver() {
     if (!isHomePage()) {
       if (homeTabObserver) {
@@ -1292,10 +1401,16 @@
       // タブ一覧を描画し終えていないタイミングがあり、この関数がタブ一覧を
       // 見つけられないまま即returnしていたのが原因と考えられる。少し
       // 待って再度探す。
-      tablist = await waitFor(() => {
-        const tl = document.querySelector('[data-testid="primaryColumn"] [role="tablist"]');
-        return isHomeStyleTablist(tl) ? tl : null;
-      }, 3000, 100);
+      if (homeTabWaitInFlight) return; // 既に誰かが待っている。結果はそちらが拾う
+      homeTabWaitInFlight = true;
+      try {
+        tablist = await waitFor(() => {
+          const tl = document.querySelector('[data-testid="primaryColumn"] [role="tablist"]');
+          return isHomeStyleTablist(tl) ? tl : null;
+        }, 3000, 100);
+      } finally {
+        homeTabWaitInFlight = false;
+      }
       if (!isHomePage() || !tablist) return; // 待っている間に他ページへ移動していたら何もしない
     }
     if (tablist === homeTabObserverTarget) return;
@@ -4186,6 +4301,7 @@
   const GRID_CACHE_MAX = 8;
 
   function deactivateGrid() {
+    diag('grid-off', Grid.active ? Grid.mode : '');
     markAllLoadedAsSeen(); // 他ページへ移動する＝ここで一区切り
     if (Grid.active && Grid.activeHref && Grid.entries.length > 0 && Grid.shellEl) {
       // キーはURL+スコープ。ホームはタブ（おすすめ/フォロー中/リスト）ごとに
@@ -5567,12 +5683,18 @@
         // 空のタブバーだけ先に置いて場所を確保し、Xがホームのタブ一覧に
         // 差し替えた時点で中身を入れる。実機計測で差し替えまで7.3秒
         // かかったことがあるので、待ち時間は長めに取る。
+        // グリッドが作り直された・閉じられた後まで30秒回り続けないよう、自分の
+        // タブバーが一度画面に載ってから外れたら、そこで待つのをやめる。
+        let tabbarWasConnected = false;
         waitFor(() => {
+          if (token !== Grid.navToken) return 'stale';
+          if (tabbarEl.isConnected) tabbarWasConnected = true;
+          else if (tabbarWasConnected) return 'stale';
           const p = document.querySelector('[data-testid="primaryColumn"]');
           const tl = p && p.querySelector('[role="tablist"]');
           return isHomeStyleTablist(tl) ? tl : null;
         }, 30000, 150).then((tl) => {
-          if (!tl || token !== Grid.navToken || currentGridMode() !== 'home') return;
+          if (!tl || tl === 'stale' || token !== Grid.navToken || currentGridMode() !== 'home') return;
           if (!tabbarEl.isConnected) return;
           fillHomeTabbar(tl);
           // 監視先も新しいタブ一覧へ張り替える（古い方を見張ったままだと
@@ -5852,6 +5974,7 @@
     Grid.maxSeenIndex = -1;
     Grid.active = true;
     Grid.activatingMode = null;
+    diag('grid-on', mode);
     Grid.activatingHref = null;
     Grid.homeScope = currentImageOnlyScope() || '';
 
@@ -6052,49 +6175,70 @@
 
   // 【実機報告「通常の開き方で画像を開くと、ホイールで裏だけ動いて肝心の画像は
   // 拡大できない」】Xの画像モーダルにはホイール拡大が無く、回すと裏のページが
-  // 動く。この拡張の売りは「開き直さずにその場で拡大」なので、モーダルの画像の
-  // 上でホイールを回したら、裏を動かす代わりに自前の拡大表示へ引き取る。
-  // 右側の返信一覧の上では従来どおりスクロールさせる（画像の領域=
-  // swipe-to-dismiss の中だけを対象にする）。
+  // 動く。モーダルの画像の上でホイールを回したら、自前の拡大表示へ引き取る。
+  // 右側の返信一覧の上では従来どおりスクロールさせる（swipe-to-dismiss の中だけ）。
+  //
+  // 【フリーズ対策（v4.6.4）】v4.6.3ではこれを document 全体に
+  // {passive:false, capture:true} のwheelリスナーとして張っていた。文書全体に
+  // 非パッシブなwheelリスナーがあると、Chromeはページ中のあらゆるホイール
+  // スクロールで「preventDefaultされるかもしれない」とメインスレッドの応答を
+  // 待つようになり、スクロールの別スレッド処理が効かなくなる。Xが描画で
+  // 忙しい時やグリッドの収集中は、そのままスクロール＝画面が固まる。
+  // 非パッシブなリスナーは画像モーダルの画像領域そのものにだけ張る。
+  // どの要素に張るかは、軽いmouseover（パッシブ）で見つけた時に1回だけ決める。
+  const modalWheelBound = new WeakSet();
+  function onModalImageWheel(e) {
+    if (Grid.active || zoomOverlayOpen()) return;
+    if (Grid.overlay && Grid.overlay.classList.contains('xmr-open')) return;
+    const src = pageZoomImageSrc();
+    if (!src) return;
+    e.preventDefault();
+    openZoomOverlay(src);
+    // 開いた直後の1回分もそのまま効かせる（指した点を基準に1段階進める）。
+    const im = zoomOverlayEl() && zoomOverlayEl().querySelector('.xmr-zoomov-img');
+    if (im && e.deltaY < 0) {
+      const cx = e.clientX;
+      const cy = e.clientY;
+      // srcを差し替えた直後は実寸が未確定（0）なので、描画が決まってから進める。
+      const step = () => {
+        zoomAttach(im);
+        zoomSet(Zoom.scale * ZOOM_STEP, cx, cy);
+      };
+      if (im.complete && im.naturalWidth) requestAnimationFrame(step);
+      else im.addEventListener('load', () => requestAnimationFrame(step), { once: true });
+    }
+  }
   document.addEventListener(
-    'wheel',
+    'mouseover',
     (e) => {
-      if (Grid.active || zoomOverlayOpen()) return;
-      if (Grid.overlay && Grid.overlay.classList.contains('xmr-open')) return;
-      const layers = document.getElementById('layers');
-      const area = layers && layers.querySelector('[data-testid="swipe-to-dismiss"]');
-      if (!area || !area.contains(e.target)) return;
-      const src = pageZoomImageSrc();
-      if (!src) return;
-      e.preventDefault();
-      openZoomOverlay(src);
-      // 開いた直後の1回分もそのまま効かせる（ホイールを回した本人の意図は
-      // 「今この位置で拡大したい」なので、指した点を基準に1段階進める）。
-      const im = zoomOverlayEl() && zoomOverlayEl().querySelector('.xmr-zoomov-img');
-      if (im && e.deltaY < 0) {
-        const cx = e.clientX;
-        const cy = e.clientY;
-        // srcを差し替えた直後は実寸が未確定（0）で、その状態で倍率を計算すると
-        // 指した点を基準にできない。描画が決まってから1段階進める。
-        const step = () => {
-          zoomAttach(im);
-          zoomSet(Zoom.scale * ZOOM_STEP, cx, cy);
-        };
-        if (im.complete && im.naturalWidth) requestAnimationFrame(step);
-        else im.addEventListener('load', () => requestAnimationFrame(step), { once: true });
-      }
+      const t = e.target;
+      const area = t && t.closest && t.closest('#layers [data-testid="swipe-to-dismiss"]');
+      if (!area || modalWheelBound.has(area)) return;
+      modalWheelBound.add(area);
+      area.addEventListener('wheel', onModalImageWheel, { passive: false });
     },
-    { passive: false, capture: true }
+    { passive: true }
   );
 
   onUrlChange(onNavigate);
 
   // 自前のトグルボタン等はSPA内の部分再描画で消えることがあるので継続監視
+  // 【フリーズ対策（v4.6.4）】Xはスクロールや読み込みのたびに大量のDOM変更を
+  // 起こし、このコールバックは1秒に何百回も呼ばれ得る。中身は全て「あるべき
+  // 状態に揃える」だけの冪等な処理だが、applyXTheme()のgetComputedStyle()は
+  // 呼ぶたびにスタイル計算を強制する。変化が何回来ても、処理は1フレームに
+  // 1回にまとめる。
+  let bodyTickQueued = false;
   const bodyObserver = new MutationObserver(() => {
-    widenMain();
-    ensureImageOnlyToggle();
-    ensureHomeTabObserver();
-    applyXTheme(); // 設定でテーマを切り替えた場合もページ遷移なしで追従させる
+    if (bodyTickQueued) return;
+    bodyTickQueued = true;
+    requestAnimationFrame(() => {
+      bodyTickQueued = false;
+      widenMain();
+      ensureImageOnlyToggle();
+      ensureHomeTabObserver();
+      applyXTheme(); // 設定でテーマを切り替えた場合もページ遷移なしで追従させる
+    });
   });
   waitFor(() => document.body, 5000, 50).then((body) => {
     if (body) bodyObserver.observe(body, { childList: true, subtree: true });
